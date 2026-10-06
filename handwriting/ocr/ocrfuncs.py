@@ -16,17 +16,18 @@ def ocrAsText(image_path):
     result = ocrAsResult(image_path)
     if not result or result is None or result[0] is None: 
         return ""
-    file_data = result[0]
-    texts = file_data.get("rec_texts", [])
-    if not texts:
-        return ""
+    texts = ""
+    for fileData in result:
+        texts = texts + "\n".join(fileData.get("rec_texts", [])) + "\n"
+        if not texts:
+            break
     return "\n".join(texts) + "\n"
 
 def ocrAsTuple(image_path):
     result = ocrAsResult(image_path)
     if not result or result is None or result[0] is None: 
-        return []
-    file_data = result[0]
-    texts = file_data.get("rec_texts", [])
-    scores = file_data.get("rec_scores", [])
-    return list(zip(texts, scores))
+        return ()
+    tupleData = ()
+    for fileData in result:
+        tupleData = tupleData + tuple(zip(fileData.get("rec_texts", []), fileData.get("rec_scores", [])))
+    return tupleData
