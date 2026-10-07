@@ -1,0 +1,5 @@
+left:
+finish detector file
+add test file
+update gitignore, requirements.txt
+add notes for the files added

@@ -1,2 +1,14 @@
 .venv
 __pycache__
+
+# MediaPipe Task Models
+*.task
+pronunciation/models/*.task
+
+# Local Video/Image Test files
+pronunciation/crops/
+pronunciation/test_data/
+*.mp4
+*.npy
+
+.vscode/
