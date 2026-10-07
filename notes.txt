@@ -1,477 +1,145 @@
-NABU — CODE AND RUN GUIDE
+PRONOUNCIATION — CODE AND RUN NOTES
 
-1. PRONOUNCIATION PACKAGE STRUCTURE
+1. FILES AND WORKFLOW
 
-The pronounciation package captures webcam images, predicts face landmarks,
-extracts mouth crops, and calculates lip measurements. Use the exact spelling
-"pronounciation" in commands and imports.
+__init__.py marks pronounciation as a Python package.
+config.py defines lip landmark IDs, model paths, and default mouth padding.
+metrics.py calculates lip geometry and extracts mouth bounding boxes/points.
+detector.py detects a face, finds its landmarks, and returns mouth data.
+test_webcam.py captures camera frames and displays the measurements.
 
-Files and their roles:
-  pronounciation/__init__.py: regular Python package marker.
-  pronounciation/config.py: lip indices, measurement anchors, and model paths.
-  pronounciation/metrics.py: geometric measurements and mouth cropping.
-  pronounciation/detector.py: MediaPipe initialization and result processing.
-  pronounciation/test_webcam.py: camera capture, display, and interactive execution.
-  pronounciation/models/face_landmarker.task: pretrained Face Landmarker bundle.
+Processing flow:
+  BGR frame -> RGB -> face detector -> padded face region -> face landmarker
+  -> lip measurements -> full-frame mouth box/points -> display or save.
+Both inference tasks use synchronous IMAGE mode, so results belong to the frame
+being processed. Call tracker.process_frame(frame) with an OpenCV BGR image.
+Its return is (crop, metrics, pts); the empty-result signal is (None,None,None).
+close() releases both inference tasks.
 
-Import flow:
-  test_webcam -> detector -> config + metrics
-  metrics -> config
+2. CONFIGURATION AND NUMBERS
 
-2. WEBCAM WORKFLOW
+DEFAULT_MODEL_PATH: pronounciation/models/face_landmarker.task
+DEFAULT_DETECTOR_PATH: pronounciation/models/blaze_face_full_range.tflite
+These paths resolve from the repository-root working directory. The separate
+FaceDetector loads the configured detector asset; FaceLandmarker loads its task
+bundle and predicts 478 face landmarks on the face region.
 
-1. Construct MouthTracker and load the local task bundle.
-2. Open camera index 0 and request 1280x720 image dimensions.
-3. Read a BGR camera frame and assign its millisecond timestamp.
-4. Convert the image to RGB and wrap it as a MediaPipe Image.
-5. Submit the image using detect_async.
-6. Receive the inference result, corresponding image, and timestamp in _callback.
-7. Store those three values together in self.latest.
-8. Read the latest completed tuple in process_frame.
-9. Convert its image to BGR and select the first face's landmarks.
-10. Calculate a padded mouth crop, lip opening, mouth width, and aspect ratio.
-11. Return the crop, metric dictionary, and 40 drawing points.
-12. Show the crop and render text, lip points, and a rectangle on the camera frame.
-13. Press lowercase q in an OpenCV window to finish and release resources.
+The lip IDs are fixed vertex indices in MediaPipe's face-mesh topology:
+  Outer upper: 61,185,40,39,37,0,267,269,270,409,291
+  Outer lower: 291,375,321,405,314,17,84,181,91,146,61
+  Inner upper: 78,191,80,81,82,13,312,311,310,415,308
+  Inner lower: 308,324,318,402,317,14,87,178,88,95,78
+Each contour closes at its starting vertex. The stored arrays contain 20 unique
+outer and 20 unique inner vertices, combined into ALL_LIP_INDICES as int32.
+13/14 identify the upper/lower inner centers; 61/291 identify the mouth corners.
+0/17 are the upper/lower outer centers; 78/308 are the inner corner endpoints.
+Intermediate IDs follow the corresponding contour. int32 means 32-bit integers;
+float32 is the 32-bit floating-point type used for crop-coordinate arrays.
 
-The callback image supplies the pixels and dimensions used for the crop and
-measurements. The display loop uses the camera frame captured in that iteration.
-Asynchronous submission lets the display loop continue while inference runs.
+MouthTracker defaults:
+  face_margin=0.25: expand each face-box side by 25% of that box's width/height.
+    A 200x160 box gets 50 horizontal and 40 vertical pixels on each side.
+  detection_interval=1: run face detection every frame.
+    MouthTracker(detection_interval=5) reuses the face region between detections,
+    refreshing on frame indices 0,5,10,...; landmark inference still runs each time.
+  min_detection_confidence=0.5: face-detector acceptance threshold.
+  num_faces=1: request one face from the landmarker.
+  DEFAULT_PADDING=25: add 25 full-image pixels on each side of the mouth box.
 
-3. pronounciation/__init__.py
+3. detector.py DETAILS AND DESIGN
 
-This empty file marks pronounciation as a regular Python package. Package-relative
-imports such as "from .config import ..." refer to modules within that package.
-The command "python -m pronounciation.test_webcam" executes the webcam module
-through Python's package import system.
+__init__ checks both model paths, requires detection_interval >= 1, creates the
+two tasks, and initializes cached bounds, frame count, and frame dimensions.
 
-4. pronounciation/config.py
+_detect_face_bounds wraps RGB pixels in mp.Image, selects the first detected
+face, expands its box by face_margin, and clips the starting/ending boundaries.
+It returns (x1,y1,x2,y2) when the rectangle has positive width and height.
 
-import numpy as np:
-  Imports numerical arrays and fixed-width numeric types under the alias np.
+process_frame converts BGR to RGB and refreshes detection when the interval is
+reached, the cached region is empty, or the image dimensions change. It makes
+the face-region RGB array contiguous with np.ascontiguousarray for MediaPipe.
+The landmarker runs on that region. An empty landmark result clears the cached
+bounds so the next frame attempts face detection again.
 
-LIP_OUTER_INDICES:
-  61, 185, 40, 39, 37, 0, 267, 269, 270, 409,
-  291, 375, 321, 405, 314, 17, 84, 181, 91, 146
-These 20 integers select vertices along the outer lip contour in MediaPipe's
-face-mesh topology. Each value is an index into the face landmark sequence.
-The model assigns consistent anatomical roles to those indices across frames.
+Mouth coordinates and measurements are calculated directly in the face region.
+The region origin (fx1,fy1) is added to drawing points and box endpoints. Padding
+is applied in full-frame coordinates, and the mouth image is sliced from the
+original BGR frame. metrics["bbox"] stores [x1,y1,x2,y2].
 
-Outer upper arc:
-  61 -> 185 -> 40 -> 39 -> 37 -> 0 -> 267 -> 269 -> 270 -> 409 -> 291
-  61 and 291 are the corners. 0 is the upper outer center. The four indices on
-  each side select successive contour vertices between the center and corner.
-Outer lower arc:
-  291 -> 375 -> 321 -> 405 -> 314 -> 17 -> 84 -> 181 -> 91 -> 146 -> 61
-  17 is the lower outer center. The other intermediate indices follow the lower
-  contour. Returning to 61 closes the boundary.
-The stored list includes each of these 20 vertices once.
+This organization keeps face-box logic in one helper and avoids creating a
+replacement object for every face landmark. DEFAULT_PADDING centralizes the
+mouth-margin default. Optional region reuse reduces face-detection calls.
 
-LIP_INNER_INDICES:
-  78, 191, 80, 81, 82, 13, 312, 311, 310, 415,
-  308, 324, 318, 402, 317, 14, 87, 178, 88, 95
-These 20 integers select the inner lip contour around the mouth opening.
+4. metrics.py MATH
 
-Inner upper arc:
-  78 -> 191 -> 80 -> 81 -> 82 -> 13 -> 312 -> 311 -> 310 -> 415 -> 308
-  78 and 308 are the inner corner endpoints. 13 is the upper inner center.
-  The intermediate vertices follow the upper inner boundary.
-Inner lower arc:
-  308 -> 324 -> 318 -> 402 -> 317 -> 14 -> 87 -> 178 -> 88 -> 95 -> 78
-  14 is the lower inner center. Intermediate vertices follow the lower inner
-  boundary. Returning to 78 closes this contour.
+For the face-region width W and height H, normalized coordinates become pixels:
+  x_pixel = landmark.x * W
+  y_pixel = landmark.y * H
 
-ALL_LIP_INDICES = np.array(LIP_OUTER_INDICES + LIP_INNER_INDICES, dtype=np.int32):
-  '+' concatenates the two lists, outer first, giving 40 entries.
-  np.array stores them as a numerical array.
-  int32 is a signed integer type occupying 32 bits per value.
-  The crop function iterates over this array to retrieve the selected landmarks.
-
-Measurement anchors:
-  UPPER_INNER_LIP = 13: upper inner lip's center.
-  LOWER_INNER_LIP = 14: lower inner lip's center.
-  CORNER_LEFT_LIP = 61: one outer mouth corner.
-  CORNER_RIGHT_LIP = 291: the other outer mouth corner.
-The abs() operations in metrics.py make the resulting separations positive
-regardless of which point has the larger coordinate in the displayed image.
-
-DEFAULT_PADDING = 25:
-  Adds 25 image pixels around each side of the lip-coordinate bounds.
-  Padding retains visual context around the lips in the crop.
-
-DEFAULT_MODEL_PATH = "pronounciation/models/face_landmarker.task":
-  Relative filesystem location of the Face Landmarker bundle loaded by
-  MouthTracker. Python resolves it from the working directory.
-
-DEFAULT_DETECTOR_PATH = "pronounciation/models/blaze_face_full_range.tflite":
-  Relative filesystem location configured for a standalone full-range BlazeFace
-  detector asset. The string names its intended model file.
-
-5. LANDMARK COORDINATES AND METRIC FORMULAS
-
-Images are NumPy arrays with shape (height, width, channels). The upper-left
-image origin is (0,0); x increases rightward and y increases downward.
-
-For image width W and height H, normalized landmark coordinates become pixels:
-  x_pixel = x_normalized * W
-  y_pixel = y_normalized * H
-Example: x=0.5 in a 1280-pixel-wide image gives x_pixel=640.
-Example: y=0.5 in a 720-pixel-high image gives y_pixel=360.
-These floating-point pixel positions are used directly for metric calculations.
-Array indexing and drawing use integer positions.
-
-compute_phonetic_metrics(landmarks, img_w: int, img_h: int) -> dict:
-  landmarks: the selected face's landmark sequence.
-  img_w: corresponding image width in pixels.
-  img_h: corresponding image height in pixels.
-  -> dict: documents the function's dictionary return type.
-
-Anchor conversion:
-  top_y = landmarks[13].y * H
-  bottom_y = landmarks[14].y * H
-  left_x = landmarks[61].x * W
-  right_x = landmarks[291].x * W
-Each lookup selects an anchor, reads its coordinate component, and scales that
-component by the corresponding image dimension.
-
-Vertical opening:
-  aperture_px = abs(bottom_y - top_y)
-This is the vertical separation of the inner lip centers, measured in pixels.
-The absolute-value function removes the sign of the difference.
-
-Horizontal width:
-  stretch_px = abs(right_x - left_x)
-This is the horizontal separation of the mouth corners, measured in pixels.
-The dictionary calls this measurement "stretch_px".
-
-Lip aspect ratio:
+  aperture_px = abs(y14 - y13)
+  stretch_px = abs(x291 - x61)
   aspect_ratio = aperture_px / (stretch_px + 1e-6)
-The ratio expresses opening relative to width. Pixel units cancel, giving a
-dimensionless number. 1e-6 means 0.000001, the epsilon added to the denominator
-to keep it positive when the measured width is zero.
 
-Numerical example for W=1280 and H=720:
-  upper inner y=0.50 -> 360 pixels.
-  lower inner y=0.55 -> 396 pixels.
-  aperture_px = abs(396-360) = 36.
-  corner x values 0.40 and 0.60 -> 512 and 768 pixels.
-  stretch_px = abs(768-512) = 256.
-  aspect_ratio = 36/(256+0.000001), approximately 0.140625.
+Aperture is vertical inner-lip opening; stretch is horizontal mouth width.
+Both are in pixels. The ratio is dimensionless. abs makes distances positive;
+1e-6 is 0.000001, an epsilon that prevents a zero denominator.
+Example: opening=36 px and width=256 px -> ratio approximately 0.140625.
+Under uniform scaling, opening and width scale together, preserving their ratio
+approximately. Translating coordinates leaves these differences unchanged.
 
-The formulas measure vertical and horizontal coordinate components. Under
-uniform scaling by a factor s, both component separations multiply by s;
-therefore their ratio remains approximately the same, accounting for epsilon.
+extract_mouth_crop gathers the 40 lip coordinates, finds min/max x/y, converts
+bounds to integers, and applies its padding. In detector.py it is called with
+padding=0; the detector then adds DEFAULT_PADDING to the translated mouth box.
+NumPy slicing uses frame[y1:y2,x1:x2], with exclusive end boundaries. pts has
+shape (40,2), with integer [x,y] rows. The metrics dictionary contains Python
+floats plus the full-frame bbox added by the tracker.
 
-Return value:
-  {
-    "aperture_px": float(aperture_px),
-    "stretch_px": float(stretch_px),
-    "aspect_ratio": float(aspect_ratio)
-  }
-float() converts each scalar to a Python floating-point value. Type hints such
-as int, dict, and np.ndarray describe the intended input/output types.
+5. test_webcam.py DISPLAY
 
-6. pronounciation/metrics.py — MOUTH CROP
+VideoCapture(0) selects camera zero; 1280x720 requests a 16:9 capture image.
+Each successful read goes directly to process_frame. A nonempty crop is shown
+in Mouth Crop (ROI); the camera image is shown in Webcam Feed.
 
-This module imports NumPy, the four measurement anchors, ALL_LIP_INDICES, and
-DEFAULT_PADDING from config.py. It keeps coordinate arithmetic and crop
-construction together as reusable functions.
+Display numbers:
+  .1f: one decimal for pixel measurements; .2f: two decimals for the ratio.
+  (30,50): text-baseline origin in pixels; 0.8: font scale; 2: stroke thickness.
+  (0,255,0): green text; (0,0,255): red points; (255,0,0): blue box, all BGR.
+  Circle radius=1 pixel; thickness=-1 fills each circle.
+  waitKey(1): GUI/key processing with a nominal 1-ms wait.
+  0xFF=255: low-byte key mask; ord('q')=113: lowercase exit key.
+On exit, the runner releases the camera, closes both tasks, and closes windows.
 
-extract_mouth_crop(frame: np.ndarray, landmarks, padding=DEFAULT_PADDING):
-  frame: image array to crop.
-  landmarks: corresponding face landmark sequence.
-  padding: pixel margin, defaulting to the config value of 25.
+6. RUN THE WEBCAM
 
-h, w = frame.shape[:2]:
-  Reads height and width from the first two image-array dimensions.
-
-Coordinate collection:
-  The first loop collects landmarks[i].x * w for all 40 lip IDs.
-  The second loop collects landmarks[i].y * h for the same IDs.
-  np.array(..., dtype=np.float32) creates arrays of pixel positions using
-  32-bit floating-point values.
-
-Rectangle calculation:
-  x1 = max(0, int(np.min(mouth_x)) - padding)
-  x2 = min(w, int(np.max(mouth_x)) + padding)
-  y1 = max(0, int(np.min(mouth_y)) - padding)
-  y2 = min(h, int(np.max(mouth_y)) + padding)
-
-np.min/np.max select the coordinate extrema over all lip vertices. int()
-truncates floating-point positions toward zero. Subtracting padding expands
-the starting edges; adding padding expands the ending edges. max(0,...) sets
-a lower boundary for x1/y1, and min(w/h,...) sets an upper boundary for x2/y2.
-
-Example with lip x bounds 500..700 and y bounds 350..390, padding=25:
-  x1=475, x2=725, y1=325, y2=415.
-  The resulting interior crop is 250 pixels wide and 90 pixels high.
-
-crop = frame[y1:y2, x1:x2]:
-  Slices rows first (y), then columns (x).
-  Starting endpoints are included; ending endpoints are excluded.
-  A color crop has shape (y2-y1, x2-x1, 3).
-  Basic NumPy slicing produces a view into the source array's storage.
-
-pts = np.column_stack((mouth_x.astype(np.int32), mouth_y.astype(np.int32))):
-  astype converts each coordinate to a 32-bit integer.
-  column_stack places x and y in adjacent columns.
-  The result has shape (40,2); each row is a full-image [x,y] drawing point.
-
-return crop, [x1,y1,x2,y2], pts:
-  Returns the image region, four rectangle endpoints, and drawing points.
-
-7. pronounciation/detector.py — MouthTracker
-
-Imports:
-  os: model-file existence check.
-  cv2: BGR/RGB image conversion.
-  numpy as np: array type annotation.
-  mediapipe as mp: MediaPipe Image and ImageFormat.
-  mediapipe.tasks.python: BaseOptions for model loading.
-  mediapipe.tasks.python.vision: FaceLandmarkerOptions and FaceLandmarker.
-  .config: DEFAULT_MODEL_PATH.
-  .metrics: compute_phonetic_metrics and extract_mouth_crop.
-
-class MouthTracker:
-  Groups task initialization, callback storage, frame processing, and cleanup.
-  self refers to the tracker instance. Its state includes self.detector and
-  self.latest.
-
-__init__(model_path: str = DEFAULT_MODEL_PATH):
-  os.path.exists(model_path) checks the configured location.
-  If that check fails, FileNotFoundError includes the model path in its message.
-  self.latest = None initializes callback-result storage.
-  python.BaseOptions(model_asset_path=model_path) describes the local asset.
-
-vision.FaceLandmarkerOptions(...):
-  base_options: the model-loading options just created.
-  running_mode=vision.RunningMode.LIVE_STREAM: asynchronous live-image processing.
-  result_callback=self._callback: bound method receiving completed results.
-  num_faces=1: request at most one face per result.
-
-Library defaults used by these options:
-  min_face_detection_confidence=0.5: face-detection acceptance threshold.
-  min_face_presence_confidence=0.5: face-presence acceptance threshold.
-  min_tracking_confidence=0.5: tracking acceptance threshold.
-  output_face_blendshapes=False: blendshape output toggle.
-  output_facial_transformation_matrixes=False: transformation output toggle.
-The confidence thresholds are values on a 0-to-1 scale. Single-face processing
-allows MediaPipe's smoothing behavior; live/video processing also uses tracking
-to reduce repeated face detection.
-
-vision.FaceLandmarker.create_from_options(options):
-  Creates the inference task and assigns it to self.detector.
-
-_callback(result, output_image: mp.Image, timestamp_ms: int):
-  self.latest = (result, output_image.numpy_view().copy(), timestamp_ms)
-  result contains the predicted face landmarks.
-  numpy_view() accesses the callback image's pixels.
-  copy() creates an owned array that can be retained after the callback returns.
-  timestamp_ms associates the image and prediction with its submitted time.
-  All three values are stored together as one tuple.
-
-A 1280x720 image with three uint8 channels holds:
-  1280 * 720 * 3 = 2,764,800 bytes, approximately 2.64 MiB of pixel data.
-uint8 occupies eight bits (one byte) per channel and represents values 0..255.
-The latest-result tuple provides one shared snapshot for frame processing.
-
-process_frame(frame_bgr: np.ndarray, timestamp_ms: int, padding: int = 25):
-  h,w=frame_bgr.shape[:2] reads the incoming dimensions.
-  cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB) swaps channel order to RGB.
-  mp.Image(image_format=mp.ImageFormat.SRGB,data=frame_rgb) wraps RGB pixels.
-  self.detector.detect_async(mp_image,timestamp_ms) submits the input.
-  snapshot=self.latest reads the latest callback tuple into a local variable.
-  If snapshot is None, return (None,None,None).
-  result,matched_rgb,_=snapshot unpacks its values. '_' receives the timestamp.
-  If result.face_landmarks is empty, return (None,None,None).
-  cv2.cvtColor(matched_rgb,cv2.COLOR_RGB2BGR) restores OpenCV channel order.
-  h,w=matched_bgr.shape[:2] reads the corresponding result image's dimensions.
-  landmarks=result.face_landmarks[0] selects the first face. The 0 is a list index.
-  extract_mouth_crop(...) creates the crop, box, and integer drawing coordinates.
-  compute_phonetic_metrics(landmarks,w,h) calculates the three scalar measures.
-  metrics["bbox"]=bbox adds rectangle endpoints to the dictionary.
-  return crop,metrics,pts returns all display data together.
-
-The three-None tuple is the caller's signal to wait for usable face data.
-The padding argument defaults to the literal 25 in this method. metrics.py's
-own crop-function default reads DEFAULT_PADDING when the function is defined.
-
-close():
-  Calls self.detector.close() to release the inference task's resources.
-
-8. pronounciation/models/face_landmarker.task
-
-The pretrained task bundle is ZIP-readable and contains:
-  face_detector.tflite                            229,746 bytes
-  face_landmarks_detector.tflite                 2,553,590 bytes
-  geometry_pipeline_metadata_landmarks.binarypb     19,376 bytes
-  face_blendshapes.tflite                          955,312 bytes
-Total uncompressed entry content: 3,758,024 bytes.
-
-Google's standard bundle combines a short-range BlazeFace detector, a face-mesh
-model, and a blendshape model. The face detector locates the face; the mesh model
-predicts 478 3D landmarks. The application selects 40 lip landmarks and uses their
-x/y components for image-space measurements. The .tflite entries contain the
-pretrained model representations; .binarypb stores serialized geometry metadata.
-
-The model URL in the run instructions includes float16, indicating 16-bit
-floating-point model storage, and /1/, indicating the published asset version.
-
-9. pronounciation/test_webcam.py
-
-Imports:
-  time: seconds-based clock used to construct frame timestamps.
-  cv2: camera capture, drawing, window display, and keyboard events.
-  MouthTracker: the reusable inference wrapper.
-
-main():
-  tracker=MouthTracker() initializes the task.
-  cap=cv2.VideoCapture(0) opens device index zero, usually the default camera.
-  cap.set(cv2.CAP_PROP_FRAME_WIDTH,1280) requests width in pixels.
-  cap.set(cv2.CAP_PROP_FRAME_HEIGHT,720) requests height in pixels.
-  1280/720=16/9, the requested frame aspect ratio.
-  The processing functions read the actual image dimensions from their arrays.
-
-Startup print statements display a separator, the tracker label, and the q-key
-instruction in the terminal.
-
-while cap.isOpened():
-  Continues reading while the camera capture is open.
-  ret,frame=cap.read() retrieves a success boolean and BGR image.
-  If ret is false, print the capture message and break out of the loop.
-
-Timestamp calculation:
-  timestamp_ms=int(time.time()*1000)
-  time.time() gives seconds since the Unix epoch.
-  Multiplication by 1000 converts seconds to milliseconds.
-  int() removes the fractional millisecond component.
-  Live-stream submissions use increasing millisecond timestamps.
-
-crop,metrics,pts=tracker.process_frame(frame,timestamp_ms):
-  Retrieves the mouth image, scalar measurements/box, and drawing coordinates.
-
-if crop is not None and crop.size > 0:
-  Checks for an image containing array elements before rendering mouth data.
-  crop.size counts all array elements, including color channels.
-  cv2.imshow("Mouth Crop (ROI)",crop) shows the mouth region of interest.
-
-HUD construction:
-  .1f formats aperture and stretch to one decimal place.
-  .2f formats the dimensionless aspect ratio to two decimal places.
-  The suffix px labels the pixel-distance measurements.
-
-cv2.putText(frame,hud,(30,50),cv2.FONT_HERSHEY_SIMPLEX,0.8,(0,255,0),2):
-  frame: image modified by drawing.
-  hud: text string containing the measurements.
-  (30,50): text-baseline origin, x=30 and y=50 image pixels.
-  FONT_HERSHEY_SIMPLEX: selected OpenCV built-in font.
-  0.8: font scale multiplier.
-  (0,255,0): green in BGR channel order.
-  2: text stroke thickness in pixels.
-
-for pt in pts:
-  Iterates through the 40 landmark drawing positions.
-  cv2.circle(frame,tuple(pt),1,(0,0,255),-1):
-    tuple(pt): (x,y) circle center.
-    1: one-pixel radius.
-    (0,0,255): red in BGR channel order.
-    -1: filled-circle drawing mode.
-
-x1,y1,x2,y2,=metrics["bbox"]:
-  Unpacks four box endpoints. The trailing comma is valid Python syntax.
-
-cv2.rectangle(frame,(x1,y1),(x2,y2),(255,0,0),2):
-  Draws the box between its two endpoint coordinates.
-  (255,0,0): blue in BGR order.
-  2: two-pixel border thickness.
-
-cv2.imshow("Webcam Feed",frame):
-  Displays the full camera image for the iteration.
-
-if cv2.waitKey(1) & 0xFF == ord("q"):
-  waitKey(1) processes GUI events and requests a one-millisecond keyboard wait.
-  0xFF is hexadecimal 255, an eight-bit mask retaining the key code's low byte.
-  ord("q") is 113, the lowercase q character code.
-  A matching key causes break and exits the capture loop.
-
-Cleanup:
-  cap.release(): release the camera handle.
-  tracker.close(): close the MediaPipe task.
-  cv2.destroyAllWindows(): close OpenCV windows.
-
-if __name__ == "__main__": main():
-  Starts the runner when Python executes this file as its entry module.
-
-10. DESIGN CHOICES
-  * Separate config, metrics, detector, and runner modules make topology, arithmetic, inference lifecycle, and presentation independently reusable.
-  * Dense face landmarks provide the positions used for detailed lip geometry.
-  * A pretrained local bundle supplies detector and landmark inference.
-  * num_faces=1 focuses the webcam workflow on one face.
-  * LIVE_STREAM separates inference completion from camera/display execution.
-  * A latest-result tuple groups the prediction, image, and timestamp.
-  * Copying the callback image gives the tracker owned pixel storage.
-  * Image-space measurements are directly readable alongside the camera view.
-  * The opening/width ratio expresses relative mouth shape.
-  * A 25-pixel margin retains context around the cropped lips.
-
-11. HOW TO RUN THE WEBCAM CODE
-
-Use a graphical desktop, a connected camera, and an OpenCV installation with GUI
-support. Allow camera access for the terminal or IDE launching Python.
-
-A. Open a terminal at the repository root:
-  cd "/Users/hamzamunis/Desktop/UTD_MIsc/UTD_orgs/AIS/nabu"
-
-B. Activate the project environment:
-  source .venv/bin/activate
-  python --version
-
-To create a fresh environment, use:
-  python3 -m venv .venv
+From the repository root, with camera permission enabled for your terminal/IDE:
   source .venv/bin/activate
   python -m pip install numpy mediapipe opencv-python
 
-The three packages provide numerical arrays (numpy), face-landmark inference
-(mediapipe), and camera/display operations (opencv-python). pip resolves their
-versions during installation. Windows PowerShell activation uses:
-  .venv\Scripts\Activate.ps1
-
-C. Place the Face Landmarker bundle at:
-  pronounciation/models/face_landmarker.task
-
-Model acquisition command from the repository root:
-  mkdir -p pronounciation/models
-  curl -fL "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task" -o pronounciation/models/face_landmarker.task
-mkdir -p creates the destination directory as needed. curl -f reports HTTP
-failures; -L follows redirects; -o selects the output file path.
-
-D. Execute the webcam module:
+Place both configured model assets in pronounciation/models/, then run:
   python -m pronounciation.test_webcam
 
-Alternatively, select the project interpreter explicitly:
-  .venv/bin/python -m pronounciation.test_webcam
+The -m invocation resolves package imports. Face the camera in good light;
+focus an OpenCV window and press lowercase q to exit.
 
-The -m command uses Python's package import mechanism. Running from the repository
-root also resolves the configured relative model path.
-
-E. Face the camera in good light. The Webcam Feed window shows the captured
-image. With completed face data, Mouth Crop (ROI) shows the padded mouth image;
-the full view displays green metrics text, red lip points, and a blue rectangle.
-Open and close your mouth to observe the changing geometry. Focus an OpenCV
-window and press lowercase q to exit.
-
-12. REFERENCES
-
-MediaPipe Face Landmarker model overview:
+References:
   https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker
-Python initialization, live-stream callback, and task options:
   https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python
-Face-detection model information:
-  https://github.com/google-ai-edge/mediapipe/blob/master/docs/solutions/face_detection.md
-Face Landmarker asset:
-  https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 
-The detector's BaseOptions, FaceLandmarkerOptions, create_from_options, Image
-wrapper, and detect_async/callback structure follow the MediaPipe Tasks API
-pattern. The lip selection, geometric formulas, crop construction, and OpenCV
-presentation are the application logic built around that API.
+To test:
+Step 1: Select and Download the Smallest Video Sample
+Avoid the full collection download (hundreds of gigabytes).
+1. From the collection page, open the smallest single-subject archive, such as Raw data file of 1st set within 1st subject or Processed sliced data.
+2. Download and extract the .7z file.
+3. Locate the RGB video folder (typically named RGB/, Camera/, or containing .avi / .mp4 video files). The accompanying .mat and .bin files are the FMCW radar and laser speckle captures—you can ignore or delete those.
+4. Download the Excel sheet of corpus (Corpus_index.xlsx) to see which video file corresponds to which spoken vowel or word.
+5. Copy one sample clip (e.g., subject1_vowel_a.mp4) into your local repository:
+   Bash
+   mkdir -p pronunciation/test_data
+   cp /path/to/extracted/video.mp4 pronunciation/test_data/sample.mp4
+   
+   (Because we added pronunciation/test_data/ and *.mp4 to .gitignore, this file will not be tracked by Git).
+Step 4: Validate Against the Corpus Targets
+Open the extracted mouth patches in pronunciation/crops/ alongside Excel sheet of corpus:
+- If testing a vowel clip for /a/ (e.g., as in "heart"), verify that the script captures a distinct peak in aperture_px and aspect_ratio.
+- If testing /i/ (as in "bleed"), verify that stretch_px is elevated while aperture_px remains small.
+- Confirm that the generated image frames in pronunciation/crops/ cleanly isolate the oral cavity without cropping out the mouth corners (61, 291).

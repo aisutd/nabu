@@ -1,4 +1,3 @@
-import time
 import cv2
 from pronounciation.detector import MouthTracker
 
@@ -20,8 +19,7 @@ def main():
       print("Could not capture from cap")
       break
 
-    timestamp_ms = int(time.time() * 1000)
-    crop, metrics, pts = tracker.process_frame(frame, timestamp_ms)
+    crop, metrics, pts = tracker.process_frame(frame)
 
     if crop is not None and crop.size > 0:
       cv2.imshow("Mouth Crop (ROI)", crop)
