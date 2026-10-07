@@ -19,3 +19,4 @@ CORNER_RIGHT_LIP = 291
 
 DEFAULT_PADDING = 25
 DEFAULT_MODEL_PATH = "pronounciation/models/face_landmarker.task"
+DEFAULT_DETECTOR_PATH = "pronounciation/models/blaze_face_full_range.tflite"

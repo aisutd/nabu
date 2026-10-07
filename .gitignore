@@ -15,9 +15,9 @@ __pycache__/
 .DS_Store
 
 # MediaPipe Task Models (both folder spellings)
-*.task
+*.task *.tflite
 pronounciation/models/*.task
-pronounciation/models/*.task
+pronounciation/models/*.tflite
 
 # Local Video/Image Test Artifacts & Outputs
 pronunciation/crops/
