@@ -10,7 +10,7 @@ def main():
 
   print("=====================================")
   print("Nabu pronunciation mouth tracker active")
-  print("Press 'q' in the cv window to quit to quit")
+  print("Press 'q' in the cv window to quit")
   print("=====================================")
 
   while cap.isOpened():
