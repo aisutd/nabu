@@ -1,14 +1,30 @@
-.venv
-__pycache__
+# Virtual Environments
+venv/
+.venv/
+env/
 
-# MediaPipe Task Models
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Editor & System Artifacts
+.vscode/
+.idea/
+.DS_Store
+
+# MediaPipe Task Models (both folder spellings)
 *.task
-pronunciation/models/*.task
+pronounciation/models/*.task
+pronounciation/models/*.task
 
-# Local Video/Image Test files
+# Local Video/Image Test Artifacts & Outputs
 pronunciation/crops/
 pronunciation/test_data/
+pronounciation/crops/
+pronounciation/test_data/
 *.mp4
+*.avi
+*.mov
 *.npy
-
-.vscode/

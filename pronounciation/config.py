@@ -18,4 +18,4 @@ CORNER_LEFT_LIP = 61
 CORNER_RIGHT_LIP = 291
 
 DEFAULT_PADDING = 25
-DEFAULT_MODEL_PATH = "pronunciation/models/face_landmarker.task"
+DEFAULT_MODEL_PATH = "pronounciation/models/face_landmarker.task"
