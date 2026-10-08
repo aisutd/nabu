@@ -1,0 +1,10 @@
+# Python environments
+venv/
+.venv/
+__pycache__/
+
+# Machine learning datasets & model files
+*.task
+*.p
+*.npz
+SignAlphaSet/
