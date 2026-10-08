@@ -5,7 +5,7 @@ import mediapipe as mp
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from .config import DEFAULT_MODEL_PATH, DEFAULT_DETECTOR_PATH, DEFAULT_PADDING
+from .config import DEFAULT_MODEL_PATH, DEFAULT_DETECTOR_PATH, DEFAULT_PADDING, ALL_LIP_INDICES
 from .metrics import compute_phonetic_metrics, extract_mouth_crop
 
 class MouthTracker:
@@ -104,7 +104,21 @@ class MouthTracker:
     # Move drawing points from face coordinates to image coordinates.
     pts += np.array([fx1, fy1], dtype=np.int32)
     metrics = compute_phonetic_metrics(landmarks, fx2 - fx1, fy2 - fy1)
+
     metrics["bbox"] = bbox
+
+    lip_points = []
+    for i in ALL_LIP_INDICES:
+      point = [landmarks[i].x, landmarks[i].y, landmarks[i].z]
+      lip_points.append(point)
+
+    lip = np.array(lip_points, dtype=np.float32)
+
+    lip[:, 0] = (fx1 + lip[:, 0] * (fx2 - fx1)) / w
+    lip[:, 1] = (fy1 + lip[:, 1] * (fy2 - fy1)) / h
+    lip[:, 2] = lip[:, 2] * (fx2 - fx1) / w
+    metrics["landmarks"] = lip
+
     return crop, metrics, pts
 
   def close(self):

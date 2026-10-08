@@ -27,6 +27,7 @@ Decide on one coordinate system and keep it. I’d store x and y as 0 to 1 value
 Done when: I run the webcam test, print the array’s shape, and see (40, 3) on every frame where my face is found.
 
 Note: nothing happens, just a safe point
+Note: Part 1 complete.
 
 Part 2: Record a word with a key press and save it
 
@@ -41,9 +42,7 @@ Save a small amount of extra info with each recording: the label, the number of 
 
 Done when: I record “hello” twice and find two files. Loading one shows an array of shape (number of frames, 40, 3) and the label “hello”.
 
-Note: this is where stuff shows and happens, i'm done for the week
-
-Note: Once actually done, remove from Part 1: ... to this very line.
+Note: this is where stuff shows and happens
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------
