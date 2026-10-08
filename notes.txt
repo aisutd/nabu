@@ -1,4 +1,7 @@
-What I need to do now:
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------- What I need to do now:------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 - Live Input: the existing code and model to not just track and crop lips but also actually record what the user is saying as actual input. 
   - when pressing acertain button it will save all the frames(save landmarks of mouth) until stopped
   - save the dots' x, y, z the position 
@@ -11,7 +14,9 @@ What I need to do now:
   object == 1 label, x frames -- each frame all the lip landmarks
    - y objects
 
-PRONOUNCIATION — CODE AND RUN NOTES
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES --------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 1. FILES AND WORKFLOW
 
@@ -192,6 +197,9 @@ Use the returned metric log to inspect changes across frame indices:
 These are qualitative checks within the same speaker and recording conditions.
 Confirm that each crop retains the lip opening and both mouth corners (61,291).
 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------- HOW to run according to gemini on the medical collection thingy ------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Step 1: Select and Download the Smallest Video Sample
 Avoid the full collection download (hundreds of gigabytes).
@@ -210,6 +218,9 @@ Bash
 mkdir -p pronunciation/test_data
 cp /path/to/extracted/video.mp4 pronunciation/test_data/sample.mp4
 (Because we added pronunciation/test_data/ and *.mp4 to .gitignore, this file will not be tracked by Git).
+
+Step 2 - Actual code file, already there
+Step 3 - Run and test therough like the command line
 
 Step 4: Validate Against the Corpus Targets
 Open the extracted mouth patches in pronunciation/crops/ alongside Excel sheet of corpus:
