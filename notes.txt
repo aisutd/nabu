@@ -1,3 +1,16 @@
+What I need to do now:
+- Live Input: the existing code and model to not just track and crop lips but also actually record what the user is saying as actual input. 
+  - when pressing acertain button it will save all the frames(save landmarks of mouth) until stopped
+  - save the dots' x, y, z the position 
+  - need to store these in a single file, so that it can be trained later on the test_data
+  - it is something like this. later, when i press a key and say a word, the model will recognize and say "oh this is the word u were trying to say"
+
+- Training
+  - take in videos and save mouth landmark positions for each frame of them
+  Ex. (1,2,3),(2,2,3),(3,2,3) // frame 1 to 3 of one mouth landmark
+  object == 1 label, x frames -- each frame all the lip landmarks
+   - y objects
+
 PRONOUNCIATION — CODE AND RUN NOTES
 
 1. FILES AND WORKFLOW
