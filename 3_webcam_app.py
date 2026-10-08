@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import pickle
 import time
+import traceback  # Imported to reveal hidden background errors
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -12,10 +13,8 @@ with open('asl_static_model.p', 'rb') as f:
 
 alphabet = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-# 2. Configure the modern MediaPipe Hand Landmarker for LIVE_STREAM mode
 base_options = python.BaseOptions(model_asset_path='hand_landmarker.task')
 
-# Storage variables to pass data safely across the asynchronous frame threads
 latest_prediction = "None"
 latest_landmarks = None
 
@@ -23,27 +22,39 @@ latest_landmarks = None
 def render_callback(result: vision.HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     global latest_prediction, latest_landmarks
     
-    # FIX: Check if the list contains data and extract the first hand list [0]
-    if result.hand_landmarks and len(result.hand_landmarks) > 0:
-        hand_landmarks = result.hand_landmarks[0]
-        latest_landmarks = hand_landmarks
-        
-        # Calculate bounding shifts for spatial normalization
-        x_coords = [lm.x for lm in hand_landmarks]
-        y_coords = [lm.y for lm in hand_landmarks]
-        min_x, min_y = min(x_coords), min(y_coords)
-        
-        live_features = []
-        for lm in hand_landmarks:
-            live_features.append(lm.x - min_x)
-            live_features.append(lm.y - min_y)
+    # Use a try block to catch and print hidden background crashes!
+    try:
+        if result.hand_landmarks and len(result.hand_landmarks) > 0:
+            # MediaPipe live stream returns a list of hands, grab the first one
+            hand_landmarks = result.hand_landmarks[0]
+            latest_landmarks = hand_landmarks
             
-        # Run prediction matrix matching against your classifier model
-        prediction = model.predict([np.array(live_features)])
-        latest_prediction = alphabet[int(prediction)]
-    else:
-        latest_landmarks = None
-        latest_prediction = "None"
+            # Calculate bounding shifts for spatial normalization
+            x_coords = [lm.x for lm in hand_landmarks]
+            y_coords = [lm.y for lm in hand_landmarks]
+            min_x, min_y = min(x_coords), min(y_coords)
+            
+            live_features = []
+            for lm in hand_landmarks:
+                live_features.append(lm.x - min_x)
+                live_features.append(lm.y - min_y)
+            
+            # Convert to numpy array and force a 2D shape format [1, 42] expected by scikit-learn
+            input_data = np.array(live_features).reshape(1, -1)
+                
+            # Run prediction matrix matching against your classifier model
+            prediction = model.predict(input_data)
+            latest_prediction = alphabet[int(prediction[0])]
+        else:
+            latest_landmarks = None
+            latest_prediction = "None"
+            
+    except Exception as e:
+        # FORCED ERROR PRINTING: This prints hidden crashes to your terminal
+        print("\n--- HIDDEN BACKGROUND THREAD ERROR ---")
+        traceback.print_exc()
+        print("--------------------------------------\n")
+        latest_prediction = "ERROR"
 
 options = vision.HandLandmarkerOptions(
     base_options=base_options,
@@ -68,14 +79,10 @@ with vision.HandLandmarker.create_from_options(options) as detector:
         frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
         
-        # Convert OpenCV format (BGR) to MediaPipe format (RGB)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         
-        # Generate an absolute increasing millisecond timestamp required for live streams
         frame_timestamp_ms = int(time.time() * 1000)
-        
-        # Send frame into the background tracker asynchronously
         detector.detect_async(mp_image, frame_timestamp_ms)
         
         # Draw skeletal coordinate nodes manually if landmarks are active
@@ -84,8 +91,10 @@ with vision.HandLandmarker.create_from_options(options) as detector:
                 cx, cy = int(lm.x * w), int(lm.y * h)
                 cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
                 
-            # Render guessed letter layout box text onto the screen environment
-            if latest_prediction != "None":
+            if latest_prediction == "ERROR":
+                cv2.putText(frame, "Pipeline Crash! Check Terminal", (30, 60), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2, cv2.LINE_AA)
+            elif latest_prediction != "None":
                 cv2.putText(frame, f"Sign: {latest_prediction}", (30, 60), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 255, 0), 3, cv2.LINE_AA)
             else:
