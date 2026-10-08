@@ -178,3 +178,31 @@ Use the returned metric log to inspect changes across frame indices:
   /i/ (as in "bleed"): look for elevated stretch_px with small aperture_px.
 These are qualitative checks within the same speaker and recording conditions.
 Confirm that each crop retains the lip opening and both mouth corners (61,291).
+
+
+Step 1: Select and Download the Smallest Video Sample
+Avoid the full collection download (hundreds of gigabytes).
+
+From the collection page, open the smallest single-subject archive, such as Raw data file of 1st set within 1st subject or Processed sliced data.
+
+Download and extract the .7z file.
+
+Locate the RGB video folder (typically named RGB/, Camera/, or containing .avi / .mp4 video files). The accompanying .mat and .bin files are the FMCW radar and laser speckle captures—you can ignore or delete those.
+
+Download the Excel sheet of corpus (Corpus_index.xlsx) to see which video file corresponds to which spoken vowel or word.
+
+Copy one sample clip (e.g., subject1_vowel_a.mp4) into your local repository:
+
+Bash
+mkdir -p pronunciation/test_data
+cp /path/to/extracted/video.mp4 pronunciation/test_data/sample.mp4
+(Because we added pronunciation/test_data/ and *.mp4 to .gitignore, this file will not be tracked by Git).
+
+Step 4: Validate Against the Corpus Targets
+Open the extracted mouth patches in pronunciation/crops/ alongside Excel sheet of corpus:
+
+If testing a vowel clip for /a/ (e.g., as in "heart"), verify that the script captures a distinct peak in aperture_px and aspect_ratio.
+
+If testing /i/ (as in "bleed"), verify that stretch_px is elevated while aperture_px remains small.
+
+Confirm that the generated image frames in pronunciation/crops/ cleanly isolate the oral cavity without cropping out the mouth corners (61, 291).
