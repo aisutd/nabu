@@ -1,0 +1,10 @@
+# Create the environment bubble
+python -m venv venv
+
+# Activate it (Windows Command Prompt)
+venv\Scripts\activate.bat
+
+# Activate it (Mac or Linux Terminal)
+source venv/bin/activate
+
+pip install -r requirements.txt

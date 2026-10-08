@@ -22,8 +22,9 @@ latest_landmarks = None
 # This callback function executes every single time MediaPipe finishes tracking a frame
 def render_callback(result: vision.HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     global latest_prediction, latest_landmarks
-    if result.hand_landmarks:
-        # Snatch the coordinates of the first tracked hand array
+    
+    # FIX: Check if the list contains data and extract the first hand list [0]
+    if result.hand_landmarks and len(result.hand_landmarks) > 0:
         hand_landmarks = result.hand_landmarks[0]
         latest_landmarks = hand_landmarks
         
@@ -84,8 +85,12 @@ with vision.HandLandmarker.create_from_options(options) as detector:
                 cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
                 
             # Render guessed letter layout box text onto the screen environment
-            cv2.putText(frame, f"Sign: {latest_prediction}", (30, 60), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 255, 0), 3, cv2.LINE_AA)
+            if latest_prediction != "None":
+                cv2.putText(frame, f"Sign: {latest_prediction}", (30, 60), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 255, 0), 3, cv2.LINE_AA)
+            else:
+                cv2.putText(frame, "Calculating Sign...", (30, 60), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2, cv2.LINE_AA)
         else:
             cv2.putText(frame, "No Hand Detected", (30, 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2, cv2.LINE_AA)
