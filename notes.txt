@@ -14,6 +14,37 @@
   object == 1 label, x frames -- each frame all the lip landmarks
    - y objects
 
+In Steps:
+Part 1: Make the tracker output the full lip data
+
+What it means: right now the tracker gives the mouth crop and three summary numbers (aperture, stretch, aspect ratio). The dots it returns are whole-pixel x and y only, meant for drawing. For training, I need the real positions of all 40 lip dots, including z. Part 1 makes that data available and does nothing else.
+
+What I do:
+In detector.py, build an array of shape (40, 3) holding x, y, z for each lip dot, using the same 40 indices as ALL_LIP_INDICES.
+Hand it back without breaking test_webcam.py. The easiest way is to put it inside the metrics dictionary (for example metrics["landmarks"]), so the function still returns the same three things.
+Decide on one coordinate system and keep it. I’d store x and y as 0 to 1 values relative to the full frame (not pixels), so they don’t depend on camera resolution. z stays as MediaPipe gives it.
+
+Done when: I run the webcam test, print the array’s shape, and see (40, 3) on every frame where my face is found.
+
+Note: nothing happens, just a safe point
+
+Part 2: Record a word with a key press and save it
+
+What it means: this is the part I’ll actually use. I press a key, say a word, press the key again, and the whole recording gets saved with its label.
+
+What I do:
+In test_webcam.py, add a key (for example r) that toggles recording on and off.
+While recording, add each frame’s (40, 3) array to a list. Skip frames where no mouth was found, and keep a count of how many I skipped.
+Show a red “REC” label on the video while recording, so I always know the state.
+When I stop, get the label (the word I said) by typing it into the terminal, then save the frames and the label into one file. Use one file per recording, named with the word and a timestamp, in a folder like test_data/recordings/. Combining files later into one big dataset is easy.
+Save a small amount of extra info with each recording: the label, the number of frames, and the timestamp of each frame.
+
+Done when: I record “hello” twice and find two files. Loading one shows an array of shape (number of frames, 40, 3) and the label “hello”.
+
+Note: this is where stuff shows and happens, i'm done for the week
+
+Note: Once actually done, remove from Part 1: ... to this very line.
+
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -133,7 +164,7 @@ On exit, the runner releases the camera, closes both tasks, and closes windows.
 
 6. RUN THE WEBCAM
 
-From the repository root, with camera permission enabled for your terminal/IDE:
+From the repository root, with camera permission enabled for my terminal/IDE:
   source .venv/bin/activate
   python -m pip install numpy mediapipe opencv-python
 
@@ -208,11 +239,11 @@ From the collection page, open the smallest single-subject archive, such as Raw 
 
 Download and extract the .7z file.
 
-Locate the RGB video folder (typically named RGB/, Camera/, or containing .avi / .mp4 video files). The accompanying .mat and .bin files are the FMCW radar and laser speckle captures—you can ignore or delete those.
+Locate the RGB video folder (typically named RGB/, Camera/, or containing .avi / .mp4 video files). The accompanying .mat and .bin files are the FMCW radar and laser speckle captures, I can ignore or delete those.
 
 Download the Excel sheet of corpus (Corpus_index.xlsx) to see which video file corresponds to which spoken vowel or word.
 
-Copy one sample clip (e.g., subject1_vowel_a.mp4) into your local repository:
+Copy one sample clip (e.g., subject1_vowel_a.mp4) into my local repository:
 
 Bash
 mkdir -p pronunciation/test_data
