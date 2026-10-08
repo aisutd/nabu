@@ -7,6 +7,10 @@ config.py defines lip landmark IDs, model paths, and default mouth padding.
 metrics.py calculates lip geometry and extracts mouth bounding boxes/points.
 detector.py detects a face, finds its landmarks, and returns mouth data.
 test_webcam.py captures camera frames and displays the measurements.
+test_dataset_video.py saves video mouth crops and returns a per-frame metric log.
+
+The first stage locates the face with BlazeFace and selects a padded face region.
+The second stage estimates detailed landmarks in that region to measure the lips.
 
 Processing flow:
   BGR frame -> RGB -> face detector -> padded face region -> face landmarker
@@ -125,21 +129,52 @@ References:
   https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker
   https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python
 
-To test:
-Step 1: Select and Download the Smallest Video Sample
-Avoid the full collection download (hundreds of gigabytes).
-1. From the collection page, open the smallest single-subject archive, such as Raw data file of 1st set within 1st subject or Processed sliced data.
-2. Download and extract the .7z file.
-3. Locate the RGB video folder (typically named RGB/, Camera/, or containing .avi / .mp4 video files). The accompanying .mat and .bin files are the FMCW radar and laser speckle captures—you can ignore or delete those.
-4. Download the Excel sheet of corpus (Corpus_index.xlsx) to see which video file corresponds to which spoken vowel or word.
-5. Copy one sample clip (e.g., subject1_vowel_a.mp4) into your local repository:
-   Bash
-   mkdir -p pronunciation/test_data
-   cp /path/to/extracted/video.mp4 pronunciation/test_data/sample.mp4
-   
-   (Because we added pronunciation/test_data/ and *.mp4 to .gitignore, this file will not be tracked by Git).
-Step 4: Validate Against the Corpus Targets
-Open the extracted mouth patches in pronunciation/crops/ alongside Excel sheet of corpus:
-- If testing a vowel clip for /a/ (e.g., as in "heart"), verify that the script captures a distinct peak in aperture_px and aspect_ratio.
-- If testing /i/ (as in "bleed"), verify that stretch_px is elevated while aperture_px remains small.
-- Confirm that the generated image frames in pronunciation/crops/ cleanly isolate the oral cavity without cropping out the mouth corners (61, 291).
+7. test_dataset_video.py
+
+process_dataset_clip(video_path, output_dir="pronounciation/crops") checks the
+input path, creates the output folder, and opens the video with MouthTracker.
+FPS comes from the video, with 30.0 as the fallback. Frames are numbered from 0.
+  timestamp_ms = int(frame_idx / fps * 1000)
+This converts frame position to milliseconds for the log. process_frame(frame)
+uses the default mouth padding and synchronous inference.
+
+Each valid mouth crop is saved as frame_0000.jpg, frame_0001.jpg, etc.; :04d
+formats the frame index with at least four digits. Its log entry records
+frame_idx, timestamp_ms, aperture_px, stretch_px, and aspect_ratio.
+The function returns this list and prints mean/maximum aperture and aspect ratio.
+Mean is the sum divided by the number of logged frames; maximum is the largest
+logged value. The runner releases the camera and closes both inference tasks.
+
+8. SAMPLE VIDEO SETUP AND EXECUTION
+
+Choose a small single-subject archive by comparing its listed download sizes:
+  Raw data file of 1st set within 1st subject:
+    https://doi.org/10.6084/m9.figshare.24615378
+  Processed sliced data:
+    https://doi.org/10.6084/m9.figshare.24612312
+  Excel sheet of corpus (Corpus_index.xlsx):
+    https://doi.org/10.6084/m9.figshare.24615705
+
+Extract the .7z archive and select an RGB clip from RGB/, Camera/, or the video
+files. Use Corpus_index.xlsx to identify its spoken vowel/word. Keep the sensor
+captures separate from the RGB video used here.
+
+From the repository root:
+  mkdir -p pronounciation/test_videos
+  cp /path/to/extracted/video.mp4 pronounciation/test_videos/sample_clip.mp4
+  python -m pronounciation.test_dataset_video
+
+The entry point uses sample_clip.mp4; crops go to pronounciation/crops/.
+.mp4 files and the crops folder are excluded by the repository's ignore rules.
+To choose another clip/output folder or retrieve the log in Python:
+  from pronounciation.test_dataset_video import process_dataset_clip
+  log = process_dataset_clip("path/to/clip.mp4", "pronounciation/crops")
+
+9. CORPUS CHECKS
+
+Compare saved mouth patches with the spoken segment identified in Corpus_index.xlsx.
+Use the returned metric log to inspect changes across frame indices:
+  /a/ (as in "heart"): look for an aperture_px and aspect_ratio opening peak.
+  /i/ (as in "bleed"): look for elevated stretch_px with small aperture_px.
+These are qualitative checks within the same speaker and recording conditions.
+Confirm that each crop retains the lip opening and both mouth corners (61,291).

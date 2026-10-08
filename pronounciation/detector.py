@@ -20,10 +20,12 @@ class MouthTracker:
 
     self.face_margin = face_margin
     self.detection_interval = detection_interval
+    # Keep the face region between detection passes.
     self._face_bounds = None
     self._frame_count = 0
     self._frame_shape = None
 
+    # Locate the face before estimating its landmarks.
     self.face_detector = vision.FaceDetector.create_from_options(
       vision.FaceDetectorOptions(
         base_options=python.BaseOptions(model_asset_path=detector_path),
@@ -32,6 +34,7 @@ class MouthTracker:
       )
     )
 
+    # Estimate detailed landmarks inside the face region.
     self.landmarker = vision.FaceLandmarker.create_from_options(
       vision.FaceLandmarkerOptions(
         base_options=python.BaseOptions(model_asset_path=landmarker_path),
@@ -47,6 +50,7 @@ class MouthTracker:
     if not result.detections:
       return None
 
+    # Add context around the detected face.
     box = result.detections[0].bounding_box
     mx = int(box.width * self.face_margin)
     my = int(box.height * self.face_margin)
@@ -58,7 +62,9 @@ class MouthTracker:
 
   def process_frame(self, frame_bgr: np.ndarray, padding: int = DEFAULT_PADDING):
     h, w = frame_bgr.shape[:2]
+    # MediaPipe expects RGB; OpenCV supplies BGR.
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    # Refresh cached bounds when needed.
     if (
       self._face_bounds is None
       or self._frame_shape != (h, w)
@@ -72,17 +78,21 @@ class MouthTracker:
       return None, None, None
 
     fx1, fy1, fx2, fy2 = self._face_bounds
+    # Give MediaPipe a contiguous face image.
     face_rgb = np.ascontiguousarray(frame_rgb[fy1:fy2, fx1:fx2])
     face_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=face_rgb)
     result = self.landmarker.detect(image=face_image)
     if not result.face_landmarks:
+      # Reacquire the face on the next frame.
       self._face_bounds = None
       return None, None, None
 
     landmarks = result.face_landmarks[0]
     face_bgr = frame_bgr[fy1:fy2, fx1:fx2]
+    # Apply mouth padding after moving to full-frame coordinates.
     _, box, pts = extract_mouth_crop(face_bgr, landmarks, padding=0)
     x1, y1, x2, y2 = box
+    # Translate the mouth box back to the full frame.
     bbox = [
       max(0, fx1 + x1 - padding),
       max(0, fy1 + y1 - padding),
@@ -91,6 +101,7 @@ class MouthTracker:
     ]
     x1, y1, x2, y2 = bbox
     crop = frame_bgr[y1:y2, x1:x2]
+    # Move drawing points from face coordinates to image coordinates.
     pts += np.array([fx1, fy1], dtype=np.int32)
     metrics = compute_phonetic_metrics(landmarks, fx2 - fx1, fy2 - fy1)
     metrics["bbox"] = bbox

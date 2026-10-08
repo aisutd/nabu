@@ -3,6 +3,7 @@ from pronounciation.detector import MouthTracker
 
 def main():
   tracker = MouthTracker()
+  # Open the default camera.
   cap = cv2.VideoCapture(0)
   cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
   cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -21,9 +22,11 @@ def main():
 
     crop, metrics, pts = tracker.process_frame(frame)
 
+    # Draw mouth data only when a valid crop is available.
     if crop is not None and crop.size > 0:
       cv2.imshow("Mouth Crop (ROI)", crop)
 
+      # Show the measurements on the camera image.
       hud = (
         f"Aperture: {metrics['aperture_px']:.1f}px | "
         f"Stretch: {metrics['stretch_px']:.1f}px | "
@@ -31,6 +34,7 @@ def main():
       )
       cv2.putText(frame, hud, (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
+      # Mark the lip points and mouth bounds.
       for pt in pts:
         cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1)
 
@@ -42,6 +46,7 @@ def main():
     if cv2.waitKey(1) & 0xFF == ord("q"):
       break
 
+  # Release capture, models, and display windows.
   cap.release()
   tracker.close()
   cv2.destroyAllWindows()
