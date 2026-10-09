@@ -62,6 +62,9 @@ def main():
     if recording:
       cv2.putText(frame, f"REC  frames: {len(frames)}  (press '{chr(record_key)}' to stop)",
                   (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+    else:
+      cv2.putText(frame, "Press andy key to record, or q to quit", 
+                  (39, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
     cv2.imshow("Webcam Feed", frame)
 
@@ -95,6 +98,10 @@ def main():
           print(f"Saved to {path}")
         else:
           print("Recording discarded.")
+
+      again = input("Record another word? Press Enter to continue, or type q and Enter to quit: ").strip().lower()
+      if again == "q":
+        break
 
   # Release capture, models, and display windows.
   cap.release()

@@ -42,10 +42,22 @@ Show a red “REC” label on the video while recording, so I always know the st
 When I stop, get the label (the word I said) by typing it into the terminal, then save the frames and the label into one file. Use one file per recording, named with the word and a timestamp, in a folder like test_data/recordings/. Combining files later into one big dataset is easy.
 Save a small amount of extra info with each recording: the label, the number of frames, and the timestamp of each frame.
 
-current progress: implemented a recording saver file which saves all the recordings into a folder
-Next: do actual implementation for the recording process
-      do it so r key can be pressed. then, any key can be pressed.
+current progress: Implemented the recording process, pressing a key starts and stops recording and saves the recording locally
+
+Next: verify the code works (as in the file has what we want), loop it to ask if they wanna start again, etc, save files as label name automatically
       modularize the test_webcam (maybe shift around recording code??)
+
+To check what was saved:
+python -c "
+import glob, numpy as np
+p = sorted(glob.glob('pronounciation/test_data/recordings/*.npz'))[-1]
+d = np.load(p)
+print(p)
+print('label:', str(d['label']))
+print('landmarks shape:', d['landmarks'].shape)
+print('skipped:', int(d['skipped']))
+print('duration ms:', d['timestamps_ms'][-1])
+"
 
 Done when: I record “hello” twice and find two files. Loading one shows an array of shape (number of frames, 40, 3) and the label “hello”.
 
