@@ -46,6 +46,7 @@ current progress: Implemented the recording process, pressing a key starts and s
 
 Next: verify the code works (as in the file has what we want), 
       modularize the test_webcam (maybe shift around recording code??)
+      save files as csv, not npz
 
 problem: The label entering and cv resetting have to happen from he terminal. everything can happen from the cv window
 

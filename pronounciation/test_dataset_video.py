@@ -1,3 +1,4 @@
+# For testing input videos not live ones
 import os
 import cv2
 import numpy as np

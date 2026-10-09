@@ -1,3 +1,4 @@
+# For testing live input from the webcam
 import time
 import cv2
 from pronounciation.detector import MouthTracker
