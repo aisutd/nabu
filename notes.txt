@@ -42,13 +42,8 @@ Show a red “REC” label on the video while recording, so I always know the st
 When I stop, get the label (the word I said) by typing it into the terminal, then save the frames and the label into one file. Use one file per recording, named with the word and a timestamp, in a folder like test_data/recordings/. Combining files later into one big dataset is easy.
 Save a small amount of extra info with each recording: the label, the number of frames, and the timestamp of each frame.
 
-current progress: Implemented the recording process, pressing a key starts and stops recording and saves the recording locally
+current progress: Finished, now can take live input and save locally. some edge cases work.
 
-Next: verify the code works (as in the file has what we want), 
-      modularize the test_webcam (maybe shift around recording code??)
-      save files as csv, not npz
-
-problem: The label entering and cv resetting have to happen from he terminal. everything can happen from the cv window
 
 To check what was saved:
 python -c "
@@ -65,6 +60,13 @@ print('duration ms:', d['timestamps_ms'][-1])
 Done when: I record “hello” twice and find two files. Loading one shows an array of shape (number of frames, 40, 3) and the label “hello”.
 
 Note: this is where stuff shows and happens
+Note: Part 2 complete as well
+
+problem: The label entering and cv resetting have to happen from he terminal. everything can happen from the cv window
+
+Next: verify the code works (as in the file has what we want), 
+      modularize the test_webcam (maybe shift around recording code??)
+      save files as csv, not npz
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------
