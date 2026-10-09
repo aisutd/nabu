@@ -47,7 +47,7 @@ current progress: Implemented the recording process, pressing a key starts and s
 Next: verify the code works (as in the file has what we want), 
       modularize the test_webcam (maybe shift around recording code??)
 
-problem: when it says Record another word? Press Enter to continue, or type q and Enter to quit:  and i press a key, nothing really happens. (have to click on cv window then oress he key to record). but if q and enter pressed directly, it quits
+problem: The label entering and cv resetting have to happen from he terminal. everything can happen from the cv window
 
 To check what was saved:
 python -c "

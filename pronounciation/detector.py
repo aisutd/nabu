@@ -114,6 +114,7 @@ class MouthTracker:
 
     lip = np.array(lip_points, dtype=np.float32)
 
+    # Normalize lip coordinates to the full frame, scaling depth by width.
     lip[:, 0] = (fx1 + lip[:, 0] * (fx2 - fx1)) / w
     lip[:, 1] = (fy1 + lip[:, 1] * (fy2 - fy1)) / h
     lip[:, 2] = lip[:, 2] * (fx2 - fx1) / w

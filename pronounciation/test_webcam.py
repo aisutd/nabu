@@ -33,6 +33,7 @@ def main():
     crop, metrics, pts = tracker.process_frame(frame)
     found = crop is not None and crop.size > 0
 
+    # Save detected lip landmarks with time elapsed since recording began.
     if recording:
       if found:
         frames.append(metrics["landmarks"])
@@ -70,6 +71,7 @@ def main():
 
     key = cv2.waitKey(1) & 0xFF
 
+    # waitKey returns -1 when idle; masking converts it to 255.
     if key == 255:
       pass
 
@@ -78,6 +80,7 @@ def main():
         print("Quit while recording. Recording not saved.")
       break
 
+    # Remember the start key so only that key can stop this recording.
     elif not recording:
       recording = True
       record_key = key
@@ -92,6 +95,7 @@ def main():
       if not frames:
         print("No frames captured. Recording not saved.")
       else:
+        # Attach the spoken label; an empty label discards the capture.
         label = input("Enter said word/letter/sentence. leave empty to discard:").strip()
         if label:
           path = save_recording(label, frames, timestamps_ms, skipped)
