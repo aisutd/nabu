@@ -44,7 +44,7 @@ Save a small amount of extra info with each recording: the label, the number of 
 
 current progress: implemented a recording saver file which saves all the recordings into a folder
 Next: do actual implementation for the recording process
-      do it so any key can be pressed
+      do it so r key can be pressed. then, any key can be pressed.
       modularize the test_webcam (maybe shift around recording code??)
 
 Done when: I record “hello” twice and find two files. Loading one shows an array of shape (number of frames, 40, 3) and the label “hello”.

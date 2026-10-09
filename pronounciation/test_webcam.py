@@ -1,5 +1,7 @@
+import time
 import cv2
 from pronounciation.detector import MouthTracker
+from pronounciation.recorder import save_recording
 
 def main():
   tracker = MouthTracker()
@@ -8,8 +10,16 @@ def main():
   cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
   cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
+  recording = False
+  record_key = None
+  frames = []
+  timestamps_ms = []
+  skipped = 0
+  start_time = 0.0
+
   print("=====================================")
-  print("Nabu pronunciation mouth tracker active")
+  print("Pronunciation mouth tracker active")
+  print("Press any key (except 'q') to start recording. Only the same key can stop the recording.")
   print("Press 'q' in the cv window to quit")
   print("=====================================")
 
@@ -21,9 +31,17 @@ def main():
       break
 
     crop, metrics, pts = tracker.process_frame(frame)
+    found = crop is not None and crop.size > 0
+
+    if recording:
+      if found:
+        frames.append(metrics["landmarks"])
+        timestamps_ms.append(int((time.time() - start_time) * 1000))
+      else:
+        skipped += 1
 
     # Draw mouth data only when a valid crop is available.
-    if crop is not None and crop.size > 0:
+    if found:
       cv2.imshow("Mouth Crop (ROI)", crop)
 
       # Show the measurements on the camera image.
@@ -41,10 +59,42 @@ def main():
       x1, y1, x2, y2, = metrics["bbox"]
       cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
 
+    if recording:
+      cv2.putText(frame, f"REC  frames: {len(frames)}  (press '{chr(record_key)}' to stop)",
+                  (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
     cv2.imshow("Webcam Feed", frame)
 
-    if cv2.waitKey(1) & 0xFF == ord("q"):
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == 255:
+      pass
+
+    elif key == ord("q"):
+      if recording:
+        print("Quit while recording. Recording not saved.")
       break
+
+    elif not recording:
+      recording = True
+      record_key = key
+      frames, timestamps_ms, skipped = [], [], 0
+      start_time = time.time()
+      print(f"Recording started with '{chr(record_key)}' press '{chr(record_key)}' again to stop")
+
+    elif key == record_key:
+      recording = False
+      record_key = None
+      print(f"Recording stopped: {len(frames)} frames, {skipped} skipped.")
+      if not frames:
+        print("No frames captured. Recording not saved.")
+      else:
+        label = input("Enter said word/letter/sentence. leave empty to discard:").strip()
+        if label:
+          path = save_recording(label, frames, timestamps_ms, skipped)
+          print(f"Saved to {path}")
+        else:
+          print("Recording discarded.")
 
   # Release capture, models, and display windows.
   cap.release()

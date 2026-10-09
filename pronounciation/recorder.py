@@ -3,7 +3,7 @@ import re
 import time
 import numpy as np
 
-RECORDINGS_DIR = "pronounciation/test-data/recordings"
+RECORDINGS_DIR = "pronounciation/test_data/recordings"
 
 def save_recording(label, frames, timestamps_ms, skipped, out_dir=RECORDINGS_DIR):
   os.makedirs(out_dir, exist_ok=True)
