@@ -62,10 +62,10 @@ Done when: I record “hello” twice and find two files. Loading one shows an a
 Note: this is where stuff shows and happens
 Note: Part 2 complete as well
 
-problem: The label entering and cv resetting have to happen from he terminal. everything can happen from the cv window
+problem: The label entering and cv resetting have to happen from the terminal. everything else can happen from the cv window
 
 Next: verify the code works (as in the file has what we want), 
-      modularize the test_webcam (maybe shift around recording code??)
+      modularize the test_webcam or the code??
       save files as csv, not npz
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
