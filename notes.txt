@@ -69,6 +69,7 @@ Next: modularize the test_webcam or the code?? -- low priorty
       make sure csv files and code can handle any amount of frames, as in 16 or 160 or 200 or whatever -- high priorty
       multiple words single file -- both from multiple "recording sessions, and one session" -- high priorty
       trimming idle frames -- mid priorty
+      put models on github?? -- low priorty
 
 
 
