@@ -15,7 +15,7 @@ git pull origin feats/pronounciation-data-pipeline
 
 
 To run the file:
-python -m pronounciation.test_webcam.py
+python -m pronounciation.test_webcam
 
 
 - Live Input: the existing code and model to not just track and crop lips but also actually record what the user is saying as actual input. 
@@ -82,9 +82,9 @@ problem: The label entering and cv resetting have to happen from the terminal. e
 
 Next: modularize the test_webcam or the code?? -- low priorty -- later in the future, not a priorty rn at all
       incorporate audio, too, to distinguish chars like b and p -- mid priorty
-      make sure csv files and code can handle any amount of frames, as in 16 or 160 or 200 or whatever -- high priorty
       multiple words single file -- both from multiple "recording sessions, and one session" -- high priorty
       trimming idle frames -- mid priorty
+      should phrases be broken down into single words or can they stay whole
 
 
 

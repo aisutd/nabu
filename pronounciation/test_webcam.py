@@ -121,11 +121,11 @@ def main():
 
         if label:
           # Keep the original landmark-saving function unchanged.
-          path = save_recording(label, frames, timestamps_ms, skipped)
-          print(f"Saved to {path}")
+          path, recording_id = save_recording(label, frames, timestamps_ms, skipped)
+          print(f"Saved recording {recording_id} to {path}")
 
           # Save microphone audio using the SAME recording filename.
-          wav_path = Path(path).with_suffix(".wav")
+          wav_path = Path("pronounciation/test_data/audio") / f"recording_{recording_id}.wav"
           audio.save(wav_path)
           print(f"Saved audio to {wav_path}")
 
