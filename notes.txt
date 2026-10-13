@@ -1,6 +1,22 @@
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------- What I need to do now:------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+python3 -m venv .venv
+To run the whole thing: source .venv/bin/activate
+
+if wanna pull from a different branch when starting the session
+git fetch origin
+git status
+
+git push origin HEAD
+git fetch origin
+git switch feats/pronounciation-data-pipeline
+git pull origin feats/pronounciation-data-pipeline
+
+
+To run the file:
+python -m pronounciation.test_webcam.py
+
 
 - Live Input: the existing code and model to not just track and crop lips but also actually record what the user is saying as actual input. 
   - when pressing acertain button it will save all the frames(save landmarks of mouth) until stopped
