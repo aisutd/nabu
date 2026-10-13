@@ -31,7 +31,7 @@ modelscope==1.40.1
 modelscope-hub==0.4.5
 multidict==6.9.1
 networkx==3.7
-numpy==2.5.3
+numpy==2.3.4
 opt-einsum==3.3.0
 packaging==26.3
 paddleocr==3.7.0
@@ -70,3 +70,4 @@ wheel==0.48.0
 yarl==1.25.1
 mediapipe==1.1.0
 opencv-python==5.0.0.93
+sounddevice==0.5.6
