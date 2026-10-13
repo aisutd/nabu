@@ -40,6 +40,8 @@ def save_recording(label, frames, timestamps_ms, skipped, path=DATASET_PATH):
     writer = csv.writer(f)
     if not exists:
       writer.writerow(header)
+    else:
+      writer.writerow([])
 
     for i, (pts, t) in enumerate(zip(frames, timestamps_ms)):
       row = [label, i, t]
