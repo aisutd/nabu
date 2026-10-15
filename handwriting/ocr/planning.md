@@ -13,3 +13,7 @@ take max of these
 there is your worst problem point, return to user
 
 for storing font svgs, take input 'this is what it should be' character as char, convert to svg
+
+
+uvicorn/fastAPI
+clustering

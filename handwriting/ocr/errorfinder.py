@@ -99,22 +99,80 @@ def findError(textSvg, expected):
 
     #Find the point in the text SVG that is furthest from any point in the expected text
     maxDist = 0
+    maxAngle = 0
     maxPoint = None
     for textPoint in textPoints:
-        minDist = min((textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2 for exp in expectedPoints)
+        minAngle = 0
+        minDist = (textPoint[0] - expectedPoints[0][0])**2 + (textPoint[1] - expectedPoints[0][1])**2 if expectedPoints else 0
+        for exp in expectedPoints:
+            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
+            if dist < minDist:
+                minDist = dist
+                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
         if minDist > maxDist:
             maxDist = minDist
+            maxAngle = minAngle
             maxPoint = textPoint
     #Find the point in the expected text that is furthest from any point in the text SVG
-    for expectedPoint in expectedPoints:
-        minDist = min((expectedPoint[0] - text[0])**2 + (expectedPoint[1] - text[1])**2 for text in textPoints)
+    for expectedPoint in expectedPoints: 
+        for exp in expectedPoints:
+            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
+            if dist < minDist:
+                minDist = dist
+                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
         if minDist > maxDist:
             maxDist = minDist
+            maxAngle = minAngle
             maxPoint = expectedPoint
 
     #Renormalize maxPoint so that it accurately reflects where the error occurred in the original coordinate space
     maxPoint = (maxPoint[0] * normSize[2] + normSize[0], maxPoint[1] * normSize[3] + normSize[1]) if maxPoint else None
 
     #Ellipse to show problem can be rendered at center maxPoint with w=maxDist*normSize[2] and h=maxDist*normSize[3]
-    #Returns None, 0, (0, 0, 0, 0) if there is an error
-    return maxPoint, math.sqrt(maxDist), normSize
+    #You may use maxAngle to move the ellipse in the direction of the error if you want to make it more visually accurate, but it is not necessary.
+    #Returns None, 0, (0, 0, 0, 0), 0 if there is an error
+    return maxPoint, math.sqrt(maxDist), normSize, maxAngle
+
+def findErrorFromThreshold(textSvg, expected, threshold=0.1):
+    #Extract and normalize the points from the text SVG and the expected text
+    textPoints, normSize = normalize(extractSvgPoints(textSvg))
+    expectedPoints, _ = normalize(extractTextPoints(expected))
+
+    #Find the point in the text SVG that is furthest from any point in the expected text
+    dists = []
+    angles = []
+    points = []
+    for textPoint in textPoints:
+        minAngle = 0
+        minDist = (textPoint[0] - expectedPoints[0][0])**2 + (textPoint[1] - expectedPoints[0][1])**2 if expectedPoints else 0
+        for exp in expectedPoints:
+            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
+            if dist < minDist:
+                minDist = dist
+                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
+        if minDist > threshold**2:
+            dists.append(minDist)
+            angles.append(minAngle)
+            points.append(textPoint)
+    #Find the point in the expected text that is furthest from any point in the text SVG
+    for expectedPoint in expectedPoints: 
+        for exp in expectedPoints:
+            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
+            if dist < threshold**2:
+                minDist = dist
+                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
+        if minDist > threshold**2:
+            dists.append(minDist)
+            angles.append(minAngle)
+            points.append(expectedPoint)
+
+    #Renormalize points so that it accurately reflects where the error occurred in the original coordinate space
+    for point in points: 
+        point = (point[0] * normSize[2] + normSize[0], point[1] * normSize[3] + normSize[1]) if point else None
+    for dist in dists: 
+        dist = math.sqrt(dist)
+
+    #Ellipse to show problem can be rendered at center maxPoint with w=maxDist*normSize[2] and h=maxDist*normSize[3]
+    #You may use maxAngle to move the ellipse in the direction of the error if you want to make it more visually accurate, but it is not necessary.
+    #Returns None, 0, (0, 0, 0, 0), 0 if there is an error
+    return points, dists, normSize, angles
