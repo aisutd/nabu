@@ -91,49 +91,21 @@ def normalize(data):
     #Normalize the points to the range [0, 1] and return them along with the original bounding box
     return [( (point[0] - minX) / width, (point[1] - minY) / height ) for point in data], (minX, minY, width, height)
 
+def sortError(errorData):
+    points, dists, normSize, angles = errorData
+    #Sort the points, distances, and angles based on the distances in descending order
+    sortedData = sorted(zip(points, dists, angles), key=lambda x: x[1], reverse=True)
+    sortedPoints, sortedDists, sortedAngles = zip(*sortedData) if sortedData else ([], [], [])
+    return list(sortedPoints), list(sortedDists), normSize, list(sortedAngles)
+
+def findAngle(point1, point2):
+    angle = math.atan2(point2[1] - point1[1], point2[0] - point1[0])
+    if(angle < 0):
+        angle += 2 * math.pi
+    return angle
+
 #Warning, this is O(M*N) where M is the number of points in the text SVG and N is the number of points in the expected text.
 def findError(textSvg, expected):
-    #Extract and normalize the points from the text SVG and the expected text
-    textPoints, normSize = normalize(extractSvgPoints(textSvg))
-    expectedPoints, _ = normalize(extractTextPoints(expected))
-
-    #Find the point in the text SVG that is furthest from any point in the expected text
-    maxDist = 0
-    maxAngle = 0
-    maxPoint = None
-    for textPoint in textPoints:
-        minAngle = 0
-        minDist = (textPoint[0] - expectedPoints[0][0])**2 + (textPoint[1] - expectedPoints[0][1])**2 if expectedPoints else 0
-        for exp in expectedPoints:
-            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
-            if dist < minDist:
-                minDist = dist
-                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
-        if minDist > maxDist:
-            maxDist = minDist
-            maxAngle = minAngle
-            maxPoint = textPoint
-    #Find the point in the expected text that is furthest from any point in the text SVG
-    for expectedPoint in expectedPoints: 
-        for exp in expectedPoints:
-            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
-            if dist < minDist:
-                minDist = dist
-                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
-        if minDist > maxDist:
-            maxDist = minDist
-            maxAngle = minAngle
-            maxPoint = expectedPoint
-
-    #Renormalize maxPoint so that it accurately reflects where the error occurred in the original coordinate space
-    maxPoint = (maxPoint[0] * normSize[2] + normSize[0], maxPoint[1] * normSize[3] + normSize[1]) if maxPoint else None
-
-    #Ellipse to show problem can be rendered at center maxPoint with w=maxDist*normSize[2] and h=maxDist*normSize[3]
-    #You may use maxAngle to move the ellipse in the direction of the error if you want to make it more visually accurate, but it is not necessary.
-    #Returns None, 0, (0, 0, 0, 0), 0 if there is an error
-    return maxPoint, math.sqrt(maxDist), normSize, maxAngle
-
-def findErrorFromThreshold(textSvg, expected, threshold=0.1):
     #Extract and normalize the points from the text SVG and the expected text
     textPoints, normSize = normalize(extractSvgPoints(textSvg))
     expectedPoints, _ = normalize(extractTextPoints(expected))
@@ -144,35 +116,57 @@ def findErrorFromThreshold(textSvg, expected, threshold=0.1):
     points = []
     for textPoint in textPoints:
         minAngle = 0
-        minDist = (textPoint[0] - expectedPoints[0][0])**2 + (textPoint[1] - expectedPoints[0][1])**2 if expectedPoints else 0
+        minDist = float('inf')
         for exp in expectedPoints:
             dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
             if dist < minDist:
                 minDist = dist
-                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
-        if minDist > threshold**2:
-            dists.append(minDist)
-            angles.append(minAngle)
-            points.append(textPoint)
+                minAngle = findAngle(textPoint, exp)
+        dists.append(math.sqrt(minDist))
+        angles.append(minAngle)
+        points.append(textPoint)
     #Find the point in the expected text that is furthest from any point in the text SVG
     for expectedPoint in expectedPoints: 
-        for exp in expectedPoints:
-            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
-            if dist < threshold**2:
+        minAngle = 0
+        minDist = float('inf')
+        for textPoint in textPoints:
+            dist = (textPoint[0] - expectedPoint[0])**2 + (textPoint[1] - expectedPoint[1])**2
+            if dist < minDist:
                 minDist = dist
-                minAngle = math.atan2(exp[1] - textPoint[1], exp[0] - textPoint[0])
-        if minDist > threshold**2:
-            dists.append(minDist)
-            angles.append(minAngle)
-            points.append(expectedPoint)
+                minAngle = findAngle(expectedPoint, textPoint)
+        dists.append(math.sqrt(minDist))
+        angles.append(minAngle)
+        points.append(expectedPoint)
 
     #Renormalize points so that it accurately reflects where the error occurred in the original coordinate space
-    for point in points: 
-        point = (point[0] * normSize[2] + normSize[0], point[1] * normSize[3] + normSize[1]) if point else None
-    for dist in dists: 
-        dist = math.sqrt(dist)
+    for i in range(len(points)): 
+        points[i] = (points[i][0] * normSize[2] + normSize[0], points[i][1] * normSize[3] + normSize[1]) if points[i] else None
 
     #Ellipse to show problem can be rendered at center maxPoint with w=maxDist*normSize[2] and h=maxDist*normSize[3]
     #You may use maxAngle to move the ellipse in the direction of the error if you want to make it more visually accurate, but it is not necessary.
     #Returns None, 0, (0, 0, 0, 0), 0 if there is an error
     return points, dists, normSize, angles
+
+def findErrorFromThreshold(textSvg, expected, threshold=0.1):
+    points, dists, normSize, angles = sortError(findError(textSvg, expected))
+    newPoints = []
+    newDists = []
+    newAngles = []
+    i = 0
+    while dists[i] > threshold and i < len(dists):
+        newPoints.append(points[i])
+        newDists.append(dists[i])
+        newAngles.append(angles[i])
+        i += 1
+    return newPoints, newDists, normSize, newAngles
+
+def findErrorFromLeaderboard(textSvg, expected, N=5):
+    points, dists, normSize, angles = sortError(findError(textSvg, expected))
+    newPoints = []
+    newDists = []
+    newAngles = []
+    for i in range(min(N, len(dists))):
+        newPoints.append(points[i])
+        newDists.append(dists[i])
+        newAngles.append(angles[i])
+    return newPoints, newDists, normSize, newAngles
