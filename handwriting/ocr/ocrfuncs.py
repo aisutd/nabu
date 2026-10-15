@@ -5,7 +5,10 @@ os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
 import paddleocr
 
 #Temporary ocr, default to english
-ocr = paddleocr.PaddleOCR(ocr_version="PP-OCRv6", use_angle_cls=True, lang='en')
+ocr = paddleocr.PaddleOCR(
+    text_detection_model_name="PP-OCRv6_medium_det",
+    text_recognition_model_name="PP-OCRv6_medium_rec",
+)
 
 #Replaces ocr, do be careful, it is laggy. Only do when necessary (when language is different)
 def changeLang(lang): 
@@ -58,7 +61,10 @@ def ocrAsTuple(image_path):
         texts = fileData.get("rec_texts", [])
         scores = fileData.get("rec_scores", [])
         #Combine the texts and scores into pairs
-        nextData = zip(texts, scores)
+        nextData = (
+        (text, score, "Pass" if score > 0.6 else "Fail")
+        for text, score in zip(texts, scores)
+        )
         #Append the recognized texts and scores to the tuple container
         tupleData = tupleData + tuple(nextData)
     
