@@ -84,7 +84,7 @@ Next: incorporate audio, too, to distinguish chars like b and p -- mid priorty
   - whisper AI, trnascripter
       trimming idle frames -- mid priorty
       - fine if goes below 29/30 for training
-      should phrases be broken down into single words or can they stay whole
+      
 
 
 
