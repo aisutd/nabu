@@ -2,11 +2,12 @@ import os
 import cv2
 import numpy as np
 import mediapipe as mp
+import time
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 # Point this to where your SignAlphaSet dataset folder sits
-DATA_DIR = './SignAlphaSet/dataset'  
+DATA_DIR = './SignAlphaSet'  
 OUTPUT_FILE = 'asl_data.npz'
 
 # Initialize MediaPipe Landmarker in IMAGE mode
@@ -39,10 +40,10 @@ with vision.HandLandmarker.create_from_options(options) as detector:
             bgr_image = cv2.imread(img_path)
             if bgr_image is None:
                 continue
-                
+                s
             rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
-            
+            time.sleep(1)  # Optional: slight delay to avoid overwhelming the detector
             # Execute feature detection
             detection_result = detector.detect(mp_image)
             

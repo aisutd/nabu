@@ -9,3 +9,19 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
+
+Mac setup:
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+Before running the webcam app on either platform, place the A-Z SignAlphaSet dataset
+in SignAlphaSet/dataset, then generate the local classifier:
+
+python 1_extract_features.py
+python 2_train_model.py
+
+Run the webcam app:
+python 3_webcam_app.py
+
+On macOS, allow camera access for the terminal or app running Python when prompted.
