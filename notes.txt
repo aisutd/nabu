@@ -81,7 +81,9 @@ Note: Part 2 complete as well
 problem: The label entering and cv resetting have to happen from the terminal. everything else can happen from the cv window
 
 Next: incorporate audio, too, to distinguish chars like b and p -- mid priorty
+  - whisper AI, trnascripter
       trimming idle frames -- mid priorty
+      - fine if goes below 29/30 for training
       should phrases be broken down into single words or can they stay whole
 
 
