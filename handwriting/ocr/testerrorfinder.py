@@ -35,7 +35,7 @@ threshold = errorfinder.generateThreshold(results[1])
 transformedPoint, transformedSize = errorfinder.cullPointsFromLeaderboard(
     errorfinder.combineAndTransform(
         errorfinder.cullErrorFromThreshold(results, threshold=threshold)), N=5)
-#Transformed points and sizes reflect how you would display them, centered at the transformed point with the diameter of the transformed size.
+#Transformed points and sizes reflect how you would display them, centered at the transformed point with the diamater.
 print("\n\n\nTransformed Point (top 5): ", transformedPoint)
 print("\nTransformed Size (top 5): ", transformedSize)
 print("\nThreshold: ", threshold)
