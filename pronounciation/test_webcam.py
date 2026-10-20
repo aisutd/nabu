@@ -1,4 +1,5 @@
 # For testing live input from the webcam
+from pronounciation.transcribe import check
 from pathlib import Path
 import time
 import cv2
@@ -6,6 +7,7 @@ import cv2
 from pronounciation.detector import MouthTracker
 from pronounciation.recorder import save_recording
 from pronounciation.audio_record import AudioRecorder
+from pronounciation.trim import trim_idle
 
 # From Krish's recommendation of 30 frame target
 MIN_FRAMES = 30
@@ -117,6 +119,9 @@ def main():
         print(f"Only {len(frames)} frames captured. Need at least {MIN_FRAMES}. Recording not saved.")
       else:
         # Attach the spoken label; an empty label discards the capture.
+        before = len(frames) 
+        frames, timestamps_ms = trim_idle(frames, timestamps_ms) 
+        print(f"Trimmed idle frames: {before} -> {len(frames)}")  
         label = input("Enter said word/letter/sentence. leave empty to discard:").strip()
 
         if label:
@@ -128,6 +133,8 @@ def main():
           wav_path = Path("pronounciation/test_data/audio") / f"recording_{recording_id}.wav"
           audio.save(wav_path)
           print(f"Saved audio to {wav_path}")
+          heard, match = check(wav_path, label) 
+          print(f"Whisper heard: '{heard}'" + ("" if match else f"  (you typed '{label}', check this one)"))
 
           # Clear the microphone buffer for the next recording.
           audio.discard()
