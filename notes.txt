@@ -30,7 +30,7 @@ Done:
 
 Next:
 - Incorporate audio to distinguish sounds such as b and p, using Whisper for transcription.
-- Make API endpoints using FastAPI.
+  - Make API endpoints using FastAPI.
 
 Issue:
 the transcriber itself is working but:
