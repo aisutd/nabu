@@ -27,9 +27,9 @@ Done:
 - Added preprocessing for existing NPZ recordings: center landmarks on the mouth corners, scale by the recording's median mouth width, and resample single-word recordings to 29 frames. A separate exporter writes normalized 29-frame sequences to CSV. These scripts still use the older NPZ input workflow, rather than the live recorder's dataset.csv.
 - Label entry and the prompt to record another word still happen in the terminal.
 - Trim idle frames; falling below 29/30 FPS is acceptable for training.
+- Incorporate audio to distinguish sounds such as b and p, using Whisper for transcription.
 
 Next:
-- Incorporate audio to distinguish sounds such as b and p, using Whisper for transcription.
   - Make API endpoints using FastAPI.
 
 Issue:
