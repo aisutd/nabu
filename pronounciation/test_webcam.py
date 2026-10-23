@@ -139,6 +139,13 @@ def main():
           wav_path = Path("pronounciation/test_data/audio") / f"recording_{recording_id}.wav"
           audio.save(wav_path)
           print(f"Saved audio to {wav_path}")
+
+          # Save the full video and merge its matching microphone recording.
+          video_path = Path("pronounciation/test_data/video") / f"recording_{recording_id}.mp4"
+          video.save(video_path)
+          add_audio(video_path, wav_path)
+          print(f"Saved video with audio to {video_path}")
+
           heard, match = check(wav_path, label) 
           print(f"Whisper heard: '{heard}'" + ("" if match else f"  (you typed '{label}', check this one)"))
 
