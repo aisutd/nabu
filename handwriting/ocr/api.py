@@ -1,91 +1,113 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
+from pathlib import Path
+import os
+import numpy as np
+import cv2
 import ocrfuncs
 import errorfinder
 
+#Paddle takes over the stop signals and can crash during Python's interpreter cleanup, which leaves a dead worker
+#holding the port and makes --reload wait forever.
+#On startup, give the stop signals back to uvicorn so it can shut down normally.
+#On shutdown (open requests are done by then), exit immediately and skip the cleanup. Nothing here needs saving on exit
+@asynccontextmanager
+async def lifespan(app):
+    ocrfuncs.restoreSignalHandlers()
+    yield
+    os._exit(0)
+
 #Create the FastAPI app instance
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
+
+#Serve the test frontend (handwriting/ocr/frontend) at /tester
+app.mount("/tester", StaticFiles(directory=Path(__file__).parent / "frontend", html=True), name="tester")
+
+#Endpoints are plain def (not async def) on purpose: OCR and errorfinder are CPU heavy, and FastAPI runs plain def
+#endpoints in a thread pool, so one slow request doesn't block every other request on the event loop
 
 #OCRfunds
-@app.get("/ocr/text")
-async def ocr_text(image_path: str):
+#takes files (and an optional language, default english) as input and returns whatever the ocrfuncs functions return
+@app.post("/ocr/text")
+def ocr_text(file: UploadFile = File(...), lang: str = Form('en')):
     #Call the ocrAsText function from ocrfuncs to get the recognized text
-    return ocrfuncs.ocrAsText(image_path)
+    data = np.frombuffer(file.file.read(), np.uint8)
+    image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    return ocrfuncs.ocrAsText(image, lang)
 
-@app.get("/ocr/tuple")
-async def ocr_tuple(image_path: str):
+@app.post("/ocr/tuple")
+def ocr_tuple(file: UploadFile = File(...), lang: str = Form('en')):
     #Call the ocrAsTuple function from ocrfuncs to get the recognized text and scores as tuples
-    return ocrfuncs.ocrAsTuple(image_path)
-
-@app.get("/ocr/changeLang")
-async def ocr_changeLang(lang: str):
-    #Call the changeLang function from ocrfuncs to change the OCR language
-    ocrfuncs.changeLang(lang)
-    return {"message": f"OCR language changed to {lang}"}
+    data = np.frombuffer(file.file.read(), np.uint8)
+    image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    return ocrfuncs.ocrAsTuple(image, lang)
 
 #Errorfinder
-@app.get("/ocr/errorfinder/findError")
-async def ocr_errorfinder(image_path: str, expected: str):
-    #Call the errorfinder function from errorfinder to find errors in the recognized text
-    return errorfinder.findError(image_path, expected)
+#similarly takes files and returns errors, errors exceeding the threshold, or errors in the leaderboard, depending on the endpoint
+@app.post("/ocr/errorfinder/findError")
+def ocr_errorfinder(file: UploadFile = File(...), expected: str = Form(...)):
+    #Call the errorfinder function from errorfinder to find errors in the recognized text   
+    return errorfinder.findError(file.file, expected) #hand paddleocr the pixels (same for the rest of the endpoints)
 
-@app.get("/ocr/errorfinder/findErrorFromThreshold")
-async def ocr_errorfinder_from_threshold(image_path: str, expected: str, threshold: float):
+@app.post("/ocr/errorfinder/findErrorFromThreshold")
+def ocr_errorfinder_from_threshold(file: UploadFile = File(...), expected: str = Form(...), threshold: float = Form(...)):
     #Call the errorfinder function from errorfinder to find errors in the recognized text based on a threshold
-    return errorfinder.findErrorFromThreshold(image_path, expected, threshold)
+    return errorfinder.findErrorFromThreshold(file.file, expected, threshold)
 
-@app.get("/ocr/errorfinder/findErrorFromLeaderboard")
-async def ocr_errorfinder_from_leaderboard(image_path: str, expected: str, N: int):
+@app.post("/ocr/errorfinder/findErrorFromLeaderboard")
+def ocr_errorfinder_from_leaderboard(file: UploadFile = File(...), expected: str = Form(...), N: int = Form(...)):
     #Call the errorfinder function from errorfinder to find errors in the recognized text based on a leaderboard
-    return errorfinder.findErrorFromLeaderboard(image_path, expected, N)
+    return errorfinder.findErrorFromLeaderboard(file.file, expected, N)
 
-@app.get("/ocr/errorfinder/sortError")
-async def ocr_errorfinder_sort_errors(image_path: str, expected: str):
+@app.post("/ocr/errorfinder/sortError")
+def ocr_errorfinder_sort_errors(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to sort errors in the recognized text
-    return errorfinder.sortError(errorfinder.findError(image_path, expected))
+    return errorfinder.sortError(errorfinder.findError(file.file, expected))
 
-@app.get("/ocr/errorfinder/sortPoints")
-async def ocr_errorfinder_sort_points(image_path: str, expected: str):
+@app.post("/ocr/errorfinder/sortPoints")
+def ocr_errorfinder_sort_points(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to sort points in the recognized text
-    return errorfinder.sortPoints(errorfinder.findError(image_path, expected))
+    return errorfinder.sortPoints(errorfinder.transformPoints(errorfinder.findError(file.file, expected)))
 
-@app.get("/ocr/errorfinder/generateThreshold")
-async def ocr_errorfinder_generate_threshold(image_path: str, expected: str):
+@app.post("/ocr/errorfinder/generateThreshold")
+def ocr_errorfinder_generate_threshold(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to generate a threshold based on the sizes of the errors
-    results = errorfinder.findError(image_path, expected)
+    results = errorfinder.findError(file.file, expected)
     return errorfinder.generateThreshold(results[1])
 
-@app.get("/ocr/errorfinder/cullErrorFromThreshold")
-async def ocr_errorfinder_cull_from_threshold(image_path: str, expected: str, threshold: float):
+@app.post("/ocr/errorfinder/cullErrorFromThreshold")
+def ocr_errorfinder_cull_from_threshold(file: UploadFile = File(...), expected: str = Form(...), threshold: float = Form(...)):
     #Call the errorfinder function from errorfinder to cull errors based on a threshold
-    results = errorfinder.findError(image_path, expected)
+    results = errorfinder.findError(file.file, expected)
     return errorfinder.cullErrorFromThreshold(results, threshold)
 
-@app.get("/ocr/errorfinder/cullPointsFromThreshold")
-async def ocr_errorfinder_cull_points_from_threshold(image_path: str, expected: str, threshold: float):
+@app.post("/ocr/errorfinder/cullPointsFromThreshold")
+def ocr_errorfinder_cull_points_from_threshold(file: UploadFile = File(...), expected: str = Form(...), threshold: float = Form(...)):
     #Call the errorfinder function from errorfinder to cull points based on a threshold
-    results = errorfinder.findError(image_path, expected)
+    results = errorfinder.transformPoints(errorfinder.findError(file.file, expected))
     return errorfinder.cullPointsFromThreshold(results, threshold)
 
-@app.get("/ocr/errorfinder/cullErrorFromLeaderboard")
-async def ocr_errorfinder_cull_from_leaderboard(image_path: str, expected: str, N: int):
+@app.post("/ocr/errorfinder/cullErrorFromLeaderboard")
+def ocr_errorfinder_cull_from_leaderboard(file: UploadFile = File(...), expected: str = Form(...), N: int = Form(...)):
     #Call the errorfinder function from errorfinder to cull errors based on a leaderboard
-    results = errorfinder.findError(image_path, expected)
+    results = errorfinder.sortError(errorfinder.findError(file.file, expected))
     return errorfinder.cullErrorFromLeaderboard(results, N)
 
-@app.get("/ocr/errorfinder/cullPointsFromLeaderboard")
-async def ocr_errorfinder_cull_points_from_leaderboard(image_path: str, expected: str, N: int):
+@app.post("/ocr/errorfinder/cullPointsFromLeaderboard")
+def ocr_errorfinder_cull_points_from_leaderboard(file: UploadFile = File(...), expected: str = Form(...), N: int = Form(...)):
     #Call the errorfinder function from errorfinder to cull points based on a leaderboard
-    results = errorfinder.findError(image_path, expected)
+    results = errorfinder.sortPoints(errorfinder.transformPoints(errorfinder.findError(file.file, expected)))
     return errorfinder.cullPointsFromLeaderboard(results, N)
 
-@app.get("/ocr/errorfinder/transformPoints")
-async def ocr_errorfinder_transform_points(image_path: str, expected: str):
+@app.post("/ocr/errorfinder/transformPoints")
+def ocr_errorfinder_transform_points(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to transform points based on the recognized text
-    results = errorfinder.findError(image_path, expected)
+    results = errorfinder.findError(file.file, expected)
     return errorfinder.transformPoints(results)
 
-@app.get("/ocr/errorfinder/combineAndTransform")
-async def ocr_errorfinder_combine_and_transform(image_path: str, expected: str):
+@app.post("/ocr/errorfinder/combineAndTransform")
+def ocr_errorfinder_combine_and_transform(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to combine and transform points based on the recognized text
-    results = errorfinder.findError(image_path, expected)
+    results = errorfinder.findError(file.file, expected)
     return errorfinder.combineAndTransform(results)
