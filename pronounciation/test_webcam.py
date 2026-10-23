@@ -8,6 +8,7 @@ from pronounciation.detector import MouthTracker
 from pronounciation.recorder import save_recording
 from pronounciation.audio_record import AudioRecorder
 from pronounciation.trim import trim_idle
+from pronounciation.video_record import VideoRecorder, add_audio
 
 # From Krish's recommendation of 30 frame target
 MIN_FRAMES = 30
@@ -16,6 +17,7 @@ def main():
   tracker = MouthTracker()
 
   audio = AudioRecorder(sample_rate=16000)
+  video = VideoRecorder() 
   # Open the default camera.
   cap = cv2.VideoCapture(0)
   cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -46,6 +48,7 @@ def main():
 
     # Save detected lip landmarks with time elapsed since recording began.
     if recording:
+      video.add(frame)
       if found:
         frames.append(metrics["landmarks"])
         timestamps_ms.append(int((time.time() - start_time) * 1000))
@@ -88,16 +91,18 @@ def main():
 
     elif key == ord("q"):
       if recording:
-        # Added - Stop and discard audio
+        # Stop and discard audio and video
         audio.discard()
+        video.discard()
         print("Quit while recording. Recording not saved.")
       break
 
     # Remember the start key so only that key can stop this recording.
     elif not recording:
 
-      # Added - start recording audio
+      # start recording audio and video
       audio.start()
+      video.start() 
 
       recording = True
       record_key = key
@@ -107,15 +112,16 @@ def main():
 
     elif key == record_key:
 
-      # Added - stop audio recording
+      # stop audio recording
       audio.stop()
       recording = False
       record_key = None
       print(f"Recording stopped: {len(frames)} frames, {skipped} skipped.")
 
-      # Added - Require at least 30 valid frames before saving recording
+      # Require at least 30 valid frames before saving recording
       if len(frames) < MIN_FRAMES:
         audio.discard()
+        video.discard()
         print(f"Only {len(frames)} frames captured. Need at least {MIN_FRAMES}. Recording not saved.")
       else:
         # Attach the spoken label; an empty label discards the capture.
@@ -138,10 +144,12 @@ def main():
 
           # Clear the microphone buffer for the next recording.
           audio.discard()
+          video.discard()
 
         else:
           # Discard audio when the user rejects the word recording.
           audio.discard()
+          video.discard()
           print("Recording discarded.")
 
       again = input("Record another word? Press Enter to continue, or type q and Enter to quit: ").strip().lower()
@@ -150,6 +158,7 @@ def main():
 
   # Release capture, models, and display windows.
   audio.discard()
+  video.discard()
   cap.release()
   tracker.close()
   cv2.destroyAllWindows()

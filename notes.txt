@@ -32,15 +32,46 @@ Done:
 Next:
   - Use an input video and an example video and compare the landmarks to see where the user was wrong
   - change the input to mp4 + wav
+  - Make API endpoints for all
 
-Issue:
-the transcriber itself is working but:
-b andf p, t and d, words like pet pat bad bet bed get horribly mixed up. sometimes get close to being right when like 1 or.  or 3 words are said but the correctness rate is like 30% 
-Maybe im missingg something?? idk
       
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+SUBPROCESS
+
+subprocess is Python's built-in module for starting other programs from Python.
+For example, instead of typing an ffmpeg command in the terminal yourself,
+Python can launch ffmpeg as a separate operating-system process and pass it
+arguments. ffmpeg does the audio/video work; subprocess starts it and lets
+Python wait for its result. ffmpeg must be installed separately and available
+on PATH; importing subprocess does not install it.
+
+Here, both calls use subprocess.run([...], check=True, capture_output=True):
+  - The list contains the program name followed by its command-line arguments.
+    Each item is passed separately, so paths containing spaces stay together.
+    These calls do not use a shell.
+  - run waits until ffmpeg finishes before Python continues.
+  - check=True raises subprocess.CalledProcessError if ffmpeg exits with a
+    nonzero status, so the code does not continue as though conversion worked.
+  - capture_output=True captures stdout and stderr instead of printing them
+    directly. On failure, the exception's stderr contains ffmpeg's error output.
+
+In video_input.py, prepare_wav(source, out_path) uses ffmpeg to extract or
+convert the source audio into a WAV suitable for transcription: no video
+(-vn), one channel (-ac 1), 16,000 samples per second (-ar 16000), and signed
+16-bit samples (-sample_fmt s16). This matches what transcribe.py expects.
+The -y option allows ffmpeg to overwrite an existing output file.
+
+In video_record.py, add_audio(video_path, wav_path) uses ffmpeg to combine the
+saved silent video with the separately recorded microphone WAV. It selects
+video from the first input and audio from the second (-map 0:v and -map 1:a),
+copies the video without re-encoding (-c:v copy), and encodes the audio as AAC
+(-c:a aac). -shortest ends the output when the shorter stream ends. ffmpeg
+writes an intermediate _av.mp4 file; after it succeeds, Python's os.replace
+replaces the silent video with that combined file.
 
 1. FILES AND WORKFLOW
 
