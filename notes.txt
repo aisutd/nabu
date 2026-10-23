@@ -285,3 +285,71 @@ If testing a vowel clip for /a/ (e.g., as in "heart"), verify that the script ca
 If testing /i/ (as in "bleed"), verify that stretch_px is elevated while aperture_px remains small.
 
 Confirm that the generated image frames in pronunciation/crops/ cleanly isolate the oral cavity without cropping out the mouth corners (61, 291).
+
+
+TESTING compare.py FROM THE TERMINAL
+
+Run these commands from the nabu repository root. The package folder is spelled
+pronounciation. Use two videos of the SAME word, with clearly visible lips.
+The paths below exist locally; confirm they contain the same word before comparing.
+Replace hello with the word actually spoken for the optional audio checks.
+
+1. Activate the environment and install Python dependencies:
+source .venv/bin/activate
+pip install -r requirements.txt
+
+2. Check FFmpeg (needed only for the optional audio check):
+ffmpeg -version
+If it is missing on macOS, install it with Homebrew:
+brew install ffmpeg
+
+3. See every supported command-line option:
+python -m pronounciation.compare --help
+
+4. Compare lip movement using the default output PNG:
+python -m pronounciation.compare \
+  --user pronounciation/test_data/video/recording_29.mp4 \
+  --example pronounciation/test_data/video/example.mp4
+
+Default PNG: pronounciation/test_data/compare_result.png
+The terminal prints duration and start/middle/end mouth-shape feedback.
+
+5. Choose a separate output PNG so earlier results are not overwritten:
+python -m pronounciation.compare \
+  --user pronounciation/test_data/video/recording_28.mp4 \
+  --example pronounciation/test_data/video/example.mp4 \
+  --out pronounciation/test_data/comparisons/recording_28.png
+
+6. Also check the spoken word using the matching microphone WAV:
+python -m pronounciation.compare \
+  --user pronounciation/test_data/video/recording_29.mp4 \
+  --example pronounciation/test_data/video/example.mp4 \
+  --user-wav pronounciation/test_data/audio/recording_29.wav \
+  --word hello \
+  --out pronounciation/test_data/comparisons/recording_29_audio.png
+
+7. Alternatively, check audio embedded in the MP4 (no separate WAV needed):
+python -m pronounciation.compare \
+  --user pronounciation/test_data/video/recording_29.mp4 \
+  --example pronounciation/test_data/video/example.mp4 \
+  --user-wav pronounciation/test_data/video/recording_29.mp4 \
+  --word hello \
+  --out pronounciation/test_data/comparisons/recording_29_embedded_audio.png
+
+Both --user-wav and --word must be supplied to enable transcription.
+Whisper may download its model on first use. Audio preparation overwrites
+pronounciation/test_data/audio/_prepared_user.wav on each audio check.
+
+8. Sanity check: compare a video against itself (shape errors should be near zero):
+python -m pronounciation.compare \
+  --user pronounciation/test_data/video/example.mp4 \
+  --example pronounciation/test_data/video/example.mp4 \
+  --out pronounciation/test_data/comparisons/self_check.png
+
+9. Open a result on macOS:
+open pronounciation/test_data/compare_result.png
+open pronounciation/test_data/comparisons/self_check.png
+
+In the PNG, green is the example and red is your recording. The plots show
+mouth opening, width, overall shape difference, and the worst aligned lip shape.
+These are geometric differences, not a calibrated pronunciation accuracy score.
