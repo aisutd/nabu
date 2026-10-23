@@ -78,7 +78,7 @@ def main():
       cv2.putText(frame, f"REC  frames: {len(frames)}  (press '{chr(record_key)}' to stop)",
                   (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
     else:
-      cv2.putText(frame, "Press andy key to record, or q to quit", 
+      cv2.putText(frame, "Press any key to record, or q to quit", 
                   (39, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
     cv2.imshow("Webcam Feed", frame)
