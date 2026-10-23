@@ -30,7 +30,8 @@ Done:
 - Incorporate audio to distinguish sounds such as b and p, using Whisper for transcription.
 
 Next:
-  - Make API endpoints using FastAPI.
+  - Use an input video and an example video and compare the landmarks to see where the user was wrong
+  - change the input to mp4 + wav
 
 Issue:
 the transcriber itself is working but:
