@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -170,9 +171,17 @@ def main():
   ap.add_argument("--user", required=True, help="your mp4")
   ap.add_argument("--example", required=True, help="mp4 of the same word said correctly")
   ap.add_argument("--user-wav", help="your wav, or the mp4 again to use its audio (optional)")
-  ap.add_argument("--word", help="the word you tried to say (used with --user-wav)")
-  ap.add_argument("--out", default="pronounciation/test_data/compare_result.png")
+  ap.add_argument("--word", help="word being compared; names the plot and optionally checks transcription")
+  ap.add_argument("--out", help="override the default plot path: pronounciation/test_data/api/plots/<word>.png")
   args = ap.parse_args()
+
+  if args.out is None:
+    if not args.word:
+      ap.error("provide --word to name the plot, or --out for a custom path")
+    filename = re.sub(r"[^a-z0-9_-]+", "_", args.word.strip().lower()).strip("_")
+    if not filename or len(filename) > 100:
+      ap.error("word must produce a filename of 1–100 characters using letters or numbers")
+    args.out = f"pronounciation/test_data/plots/{filename}.png"
 
   tracker = MouthTracker()
   user = landmarks_from_video(args.user, tracker)
@@ -181,7 +190,7 @@ def main():
 
   res = compare(user, ref)
   report(res)
-  os.makedirs(os.path.dirname(args.out), exist_ok=True)
+  os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
   plot(res, args.out)
   print(f"\nSaved plot to {args.out}")
 
