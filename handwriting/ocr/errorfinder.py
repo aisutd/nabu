@@ -357,6 +357,7 @@ def combineOne(points, sizes):
     return False, None, None, None, None
 
 #Iteratively combines points based on their sizes and distances until no more combinations can be made, returning the new points and sizes after all possible combinations.
+#Before calling, it is REQUIRED that the errorData has been culled to some extent, in order to prevent excessive combining of irrelevant points.
 def combineAndTransform(errorData): 
     points, sizes = transformPoints(errorData)
     while True: 
