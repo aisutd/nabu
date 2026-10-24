@@ -63,51 +63,51 @@ def ocr_errorfinder_from_leaderboard(file: UploadFile = File(...), expected: str
 @app.post("/ocr/errorfinder/sortError")
 def ocr_errorfinder_sort_errors(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to sort errors in the recognized text
-    return errorfinder.sortError(errorfinder.findError(file.file, expected))
+    return errorfinder.sortError(errorfinder.findError(file.file, expected))#TODO: Needs to changed to accept any input, not just from file.file
 
 @app.post("/ocr/errorfinder/sortPoints")
 def ocr_errorfinder_sort_points(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to sort points in the recognized text
-    return errorfinder.sortPoints(errorfinder.transformPoints(errorfinder.findError(file.file, expected)))
+    return errorfinder.sortPoints(errorfinder.transformPoints(errorfinder.findError(file.file, expected)))#TODO: Needs to changed to accept any input, not just from file.file
 
 @app.post("/ocr/errorfinder/generateThreshold")
 def ocr_errorfinder_generate_threshold(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to generate a threshold based on the sizes of the errors
-    results = errorfinder.findError(file.file, expected)
+    results = errorfinder.findError(file.file, expected)#TODO: Needs to changed to accept any input, not just from file.file
     return errorfinder.generateThreshold(results[1])
 
 @app.post("/ocr/errorfinder/cullErrorFromThreshold")
 def ocr_errorfinder_cull_from_threshold(file: UploadFile = File(...), expected: str = Form(...), threshold: float = Form(...)):
     #Call the errorfinder function from errorfinder to cull errors based on a threshold
     results = errorfinder.findError(file.file, expected)
-    return errorfinder.cullErrorFromThreshold(results, threshold)
+    return errorfinder.cullErrorFromThreshold(results, threshold)#TODO: Needs to changed to accept any input, not just from file.file
 
 @app.post("/ocr/errorfinder/cullPointsFromThreshold")
 def ocr_errorfinder_cull_points_from_threshold(file: UploadFile = File(...), expected: str = Form(...), threshold: float = Form(...)):
     #Call the errorfinder function from errorfinder to cull points based on a threshold
-    results = errorfinder.transformPoints(errorfinder.findError(file.file, expected))
+    results = errorfinder.transformPoints(errorfinder.findError(file.file, expected))#TODO: Needs to changed to accept any input, not just from file.file
     return errorfinder.cullPointsFromThreshold(results, threshold)
 
 @app.post("/ocr/errorfinder/cullErrorFromLeaderboard")
 def ocr_errorfinder_cull_from_leaderboard(file: UploadFile = File(...), expected: str = Form(...), N: int = Form(...)):
     #Call the errorfinder function from errorfinder to cull errors based on a leaderboard
-    results = errorfinder.sortError(errorfinder.findError(file.file, expected))
+    results = errorfinder.sortError(errorfinder.findError(file.file, expected))#TODO: Needs to changed to accept any input, not just from file.file
     return errorfinder.cullErrorFromLeaderboard(results, N)
 
 @app.post("/ocr/errorfinder/cullPointsFromLeaderboard")
 def ocr_errorfinder_cull_points_from_leaderboard(file: UploadFile = File(...), expected: str = Form(...), N: int = Form(...)):
     #Call the errorfinder function from errorfinder to cull points based on a leaderboard
-    results = errorfinder.sortPoints(errorfinder.transformPoints(errorfinder.findError(file.file, expected)))
+    results = errorfinder.sortPoints(errorfinder.transformPoints(errorfinder.findError(file.file, expected)))#TODO: Needs to changed to accept any input, not just from file.file
     return errorfinder.cullPointsFromLeaderboard(results, N)
 
 @app.post("/ocr/errorfinder/transformPoints")
 def ocr_errorfinder_transform_points(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to transform points based on the recognized text
-    results = errorfinder.findError(file.file, expected)
+    results = errorfinder.findError(file.file, expected)#TODO: Needs to changed to accept any input, not just from file.file
     return errorfinder.transformPoints(results)
 
 @app.post("/ocr/errorfinder/combineAndTransform")
 def ocr_errorfinder_combine_and_transform(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to combine and transform points based on the recognized text
-    results = errorfinder.findError(file.file, expected)
+    results = errorfinder.findError(file.file, expected)#TODO: Needs to changed to accept any input, not just from file.file
     return errorfinder.combineAndTransform(results)
