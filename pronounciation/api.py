@@ -79,6 +79,7 @@ def comparison(user_id: UUID, example_id: UUID, label: str):
         finally:
             tracker.close()
         png = PLOTS / f"{filename}.png"
+        png.parent.mkdir(parents=True, exist_ok=True)
         plot(result, str(png))
     return {
         "user_ms": result["user_ms"],
