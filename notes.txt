@@ -17,6 +17,10 @@ git pull origin feats/pronounciation-data-pipeline
 To run the file:
 python -m pronounciation.test_webcam
 
+To run the API server for testing:
+python -m uvicorn pronounciation.api:app       
+http://127.0.0.1:8000/docs#/default/comparison_comparisons_post
+
 
 Done:
 - Track and display the mouth crop, lip points, bounding box, aperture, stretch, and aspect ratio. Return 40 XYZ lip landmarks per frame as a float32 (40, 3) array, with x/y normalized to the full frame and z scaled by the face-to-frame width ratio.
