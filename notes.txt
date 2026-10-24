@@ -28,11 +28,11 @@ Done:
 - Label entry and the prompt to record another word still happen in the terminal.
 - Trim idle frames; falling below 29/30 FPS is acceptable for training.
 - Incorporate audio to distinguish sounds such as b and p, using Whisper for transcription.
+- incremental plotting for the tests
+- if anything other than q or enter is pressed when "Record another word? Press Enter to continue, or type q and Enter to quit:" is prompted it glitches. fix that
 
 Next:
-  - incremental plotting for the tests
-  - if anything other than q or enter is pressed when "Record another word? Press Enter to continue, or type q and Enter to quit:" is prompted it glitches. fix that
-
+  - ??
       
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------

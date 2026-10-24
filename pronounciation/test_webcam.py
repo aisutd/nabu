@@ -13,6 +13,15 @@ from pronounciation.video_record import VideoRecorder, add_audio
 # From Krish's recommendation of 30 frame target
 MIN_FRAMES = 30
 
+def record_another():
+  while True:
+    again = input("Record another word? Press Enter to continue, or type q and Enter to quit: ").strip().lower()
+    if again == "q":
+      return False
+    if again == "":
+      return True
+    print("Invalid input. Press Enter on an empty line to continue, or type q and Enter to quit.")
+
 def main():
   tracker = MouthTracker()
 
@@ -159,8 +168,7 @@ def main():
           video.discard()
           print("Recording discarded.")
 
-      again = input("Record another word? Press Enter to continue, or type q and Enter to quit: ").strip().lower()
-      if again == "q":
+      if not record_another():
         break
 
   # Release capture, models, and display windows.
