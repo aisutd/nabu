@@ -36,323 +36,231 @@ Done:
 - if anything other than q or enter is pressed when "Record another word? Press Enter to continue, or type q and Enter to quit:" is prompted it glitches. fix that
 
 Next:
-  - ??
+  - once Aron trains the model and pushes his code to gihub, merge his branch to mine
+    - modularize the code (make sub folders and shi)
       
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+For file explanations, workflow details, data formats, and limitations, see:
+  pronounciation/file and roles.txt
 
-SUBPROCESS
-
-subprocess is Python's built-in module for starting other programs from Python.
-For example, instead of typing an ffmpeg command in the terminal yourself,
-Python can launch ffmpeg as a separate operating-system process and pass it
-arguments. ffmpeg does the audio/video work; subprocess starts it and lets
-Python wait for its result. ffmpeg must be installed separately and available
-on PATH; importing subprocess does not install it.
-
-Here, both calls use subprocess.run([...], check=True, capture_output=True):
-  - The list contains the program name followed by its command-line arguments.
-    Each item is passed separately, so paths containing spaces stay together.
-    These calls do not use a shell.
-  - run waits until ffmpeg finishes before Python continues.
-  - check=True raises subprocess.CalledProcessError if ffmpeg exits with a
-    nonzero status, so the code does not continue as though conversion worked.
-  - capture_output=True captures stdout and stderr instead of printing them
-    directly. On failure, the exception's stderr contains ffmpeg's error output.
-
-In video_input.py, prepare_wav(source, out_path) uses ffmpeg to extract or
-convert the source audio into a WAV suitable for transcription: no video
-(-vn), one channel (-ac 1), 16,000 samples per second (-ar 16000), and signed
-16-bit samples (-sample_fmt s16). This matches what transcribe.py expects.
-The -y option allows ffmpeg to overwrite an existing output file.
-
-In video_record.py, add_audio(video_path, wav_path) uses ffmpeg to combine the
-saved silent video with the separately recorded microphone WAV. It selects
-video from the first input and audio from the second (-map 0:v and -map 1:a),
-copies the video without re-encoding (-c:v copy), and encodes the audio as AAC
-(-c:a aac). -shortest ends the output when the shorter stream ends. ffmpeg
-writes an intermediate _av.mp4 file; after it succeeds, Python's os.replace
-replaces the silent video with that combined file.
-
-1. FILES AND WORKFLOW
-
-__init__.py marks pronounciation as a Python package.
-config.py defines lip landmark IDs, model paths, and default mouth padding.
-metrics.py calculates lip geometry and extracts mouth bounding boxes/points.
-detector.py detects a face, finds its landmarks, and returns mouth data.
-test_webcam.py captures camera frames and displays the measurements.
-test_dataset_video.py saves video mouth crops and returns a per-frame metric log.
-
-The first stage locates the face with BlazeFace and selects a padded face region.
-The second stage estimates detailed landmarks in that region to measure the lips.
-
-Processing flow:
-  BGR frame -> RGB -> face detector -> padded face region -> face landmarker
-  -> lip measurements -> full-frame mouth box/points -> display or save.
-Both inference tasks use synchronous IMAGE mode, so results belong to the frame
-being processed. Call tracker.process_frame(frame) with an OpenCV BGR image.
-Its return is (crop, metrics, pts); the empty-result signal is (None,None,None).
-close() releases both inference tasks.
-
-2. CONFIGURATION AND NUMBERS
-
-DEFAULT_MODEL_PATH: pronounciation/models/face_landmarker.task
-DEFAULT_DETECTOR_PATH: pronounciation/models/blaze_face_full_range.tflite
-These paths resolve from the repository-root working directory. The separate
-FaceDetector loads the configured detector asset; FaceLandmarker loads its task
-bundle and predicts 478 face landmarks on the face region.
-
-The lip IDs are fixed vertex indices in MediaPipe's face-mesh topology:
-  Outer upper: 61,185,40,39,37,0,267,269,270,409,291
-  Outer lower: 291,375,321,405,314,17,84,181,91,146,61
-  Inner upper: 78,191,80,81,82,13,312,311,310,415,308
-  Inner lower: 308,324,318,402,317,14,87,178,88,95,78
-Each contour closes at its starting vertex. The stored arrays contain 20 unique
-outer and 20 unique inner vertices, combined into ALL_LIP_INDICES as int32.
-13/14 identify the upper/lower inner centers; 61/291 identify the mouth corners.
-0/17 are the upper/lower outer centers; 78/308 are the inner corner endpoints.
-Intermediate IDs follow the corresponding contour. int32 means 32-bit integers;
-float32 is the 32-bit floating-point type used for crop-coordinate arrays.
-
-MouthTracker defaults:
-  face_margin=0.25: expand each face-box side by 25% of that box's width/height.
-    A 200x160 box gets 50 horizontal and 40 vertical pixels on each side.
-  detection_interval=1: run face detection every frame.
-    MouthTracker(detection_interval=5) reuses the face region between detections,
-    refreshing on frame indices 0,5,10,...; landmark inference still runs each time.
-  min_detection_confidence=0.5: face-detector acceptance threshold.
-  num_faces=1: request one face from the landmarker.
-  DEFAULT_PADDING=25: add 25 full-image pixels on each side of the mouth box.
-
-3. detector.py DETAILS AND DESIGN
-
-__init__ checks both model paths, requires detection_interval >= 1, creates the
-two tasks, and initializes cached bounds, frame count, and frame dimensions.
-
-_detect_face_bounds wraps RGB pixels in mp.Image, selects the first detected
-face, expands its box by face_margin, and clips the starting/ending boundaries.
-It returns (x1,y1,x2,y2) when the rectangle has positive width and height.
-
-process_frame converts BGR to RGB and refreshes detection when the interval is
-reached, the cached region is empty, or the image dimensions change. It makes
-the face-region RGB array contiguous with np.ascontiguousarray for MediaPipe.
-The landmarker runs on that region. An empty landmark result clears the cached
-bounds so the next frame attempts face detection again.
-
-Mouth coordinates and measurements are calculated directly in the face region.
-The region origin (fx1,fy1) is added to drawing points and box endpoints. Padding
-is applied in full-frame coordinates, and the mouth image is sliced from the
-original BGR frame. metrics["bbox"] stores [x1,y1,x2,y2].
-
-This organization keeps face-box logic in one helper and avoids creating a
-replacement object for every face landmark. DEFAULT_PADDING centralizes the
-mouth-margin default. Optional region reuse reduces face-detection calls.
-
-4. metrics.py MATH
-
-For the face-region width W and height H, normalized coordinates become pixels:
-  x_pixel = landmark.x * W
-  y_pixel = landmark.y * H
-
-  aperture_px = abs(y14 - y13)
-  stretch_px = abs(x291 - x61)
-  aspect_ratio = aperture_px / (stretch_px + 1e-6)
-
-Aperture is vertical inner-lip opening; stretch is horizontal mouth width.
-Both are in pixels. The ratio is dimensionless. abs makes distances positive;
-1e-6 is 0.000001, an epsilon that prevents a zero denominator.
-Example: opening=36 px and width=256 px -> ratio approximately 0.140625.
-Under uniform scaling, opening and width scale together, preserving their ratio
-approximately. Translating coordinates leaves these differences unchanged.
-
-extract_mouth_crop gathers the 40 lip coordinates, finds min/max x/y, converts
-bounds to integers, and applies its padding. In detector.py it is called with
-padding=0; the detector then adds DEFAULT_PADDING to the translated mouth box.
-NumPy slicing uses frame[y1:y2,x1:x2], with exclusive end boundaries. pts has
-shape (40,2), with integer [x,y] rows. The metrics dictionary contains Python
-floats plus the full-frame bbox added by the tracker.
-
-5. test_webcam.py DISPLAY
-
-VideoCapture(0) selects camera zero; 1280x720 requests a 16:9 capture image.
-Each successful read goes directly to process_frame. A nonempty crop is shown
-in Mouth Crop (ROI); the camera image is shown in Webcam Feed.
-
-Display numbers:
-  .1f: one decimal for pixel measurements; .2f: two decimals for the ratio.
-  (30,50): text-baseline origin in pixels; 0.8: font scale; 2: stroke thickness.
-  (0,255,0): green text; (0,0,255): red points; (255,0,0): blue box, all BGR.
-  Circle radius=1 pixel; thickness=-1 fills each circle.
-  waitKey(1): GUI/key processing with a nominal 1-ms wait.
-  0xFF=255: low-byte key mask; ord('q')=113: lowercase exit key.
-On exit, the runner releases the camera, closes both tasks, and closes windows.
-
-6. RUN THE WEBCAM
-
-From the repository root, with camera permission enabled for my terminal/IDE:
-  source .venv/bin/activate
-  python -m pip install numpy mediapipe opencv-python
-
-Place both configured model assets in pronounciation/models/, then run:
-  python -m pronounciation.test_webcam
-
-The -m invocation resolves package imports. Face the camera in good light;
-focus an OpenCV window and press lowercase q to exit.
-
-References:
-  https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker
-  https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python
-
-7. test_dataset_video.py
-
-process_dataset_clip(video_path, output_dir="pronounciation/crops") checks the
-input path, creates the output folder, and opens the video with MouthTracker.
-FPS comes from the video, with 30.0 as the fallback. Frames are numbered from 0.
-  timestamp_ms = int(frame_idx / fps * 1000)
-This converts frame position to milliseconds for the log. process_frame(frame)
-uses the default mouth padding and synchronous inference.
-
-Each valid mouth crop is saved as frame_0000.jpg, frame_0001.jpg, etc.; :04d
-formats the frame index with at least four digits. Its log entry records
-frame_idx, timestamp_ms, aperture_px, stretch_px, and aspect_ratio.
-The function returns this list and prints mean/maximum aperture and aspect ratio.
-Mean is the sum divided by the number of logged frames; maximum is the largest
-logged value. The runner releases the camera and closes both inference tasks.
-
-8. SAMPLE VIDEO SETUP AND EXECUTION
-
-Choose a small single-subject archive by comparing its listed download sizes:
-  Raw data file of 1st set within 1st subject:
-    https://doi.org/10.6084/m9.figshare.24615378
-  Processed sliced data:
-    https://doi.org/10.6084/m9.figshare.24612312
-  Excel sheet of corpus (Corpus_index.xlsx):
-    https://doi.org/10.6084/m9.figshare.24615705
-
-Extract the .7z archive and select an RGB clip from RGB/, Camera/, or the video
-files. Use Corpus_index.xlsx to identify its spoken vowel/word. Keep the sensor
-captures separate from the RGB video used here.
-
-From the repository root:
-  mkdir -p pronounciation/test_videos
-  cp /path/to/extracted/video.mp4 pronounciation/test_videos/sample_clip.mp4
-  python -m pronounciation.test_dataset_video
-
-The entry point uses sample_clip.mp4; crops go to pronounciation/crops/.
-.mp4 files and the crops folder are excluded by the repository's ignore rules.
-To choose another clip/output folder or retrieve the log in Python:
-  from pronounciation.test_dataset_video import process_dataset_clip
-  log = process_dataset_clip("path/to/clip.mp4", "pronounciation/crops")
-
-9. CORPUS CHECKS
-
-Compare saved mouth patches with the spoken segment identified in Corpus_index.xlsx.
-Use the returned metric log to inspect changes across frame indices:
-  /a/ (as in "heart"): look for an aperture_px and aspect_ratio opening peak.
-  /i/ (as in "bleed"): look for elevated stretch_px with small aperture_px.
-These are qualitative checks within the same speaker and recording conditions.
-Confirm that each crop retains the lip opening and both mouth corners (61,291).
+Use the run instructions below from the nabu repository root. The package folder
+is spelled pronounciation.
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 --------------------------------------------- HOW to run according to gemini on the medical collection thingy ------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-Step 1: Select and Download the Smallest Video Sample
-Avoid the full collection download (hundreds of gigabytes).
+PRONOUNCIATION RUN GUIDE — RECORDING, REVIEW, AND COMPARISON
 
-From the collection page, open the smallest single-subject archive, such as Raw data file of 1st set within 1st subject or Processed sliced data.
+1. SET UP THE ENVIRONMENT
 
-Download and extract the .7z file.
+Create the virtual environment if it does not already exist:
+  python3 -m venv .venv
 
-Locate the RGB video folder (typically named RGB/, Camera/, or containing .avi / .mp4 video files). The accompanying .mat and .bin files are the FMCW radar and laser speckle captures, I can ignore or delete those.
+Activate it and install dependencies:
+  source .venv/bin/activate
+  python -m pip install -r requirements.txt
 
-Download the Excel sheet of corpus (Corpus_index.xlsx) to see which video file corresponds to which spoken vowel or word.
+Check FFmpeg:
+  ffmpeg -version
 
-Copy one sample clip (e.g., subject1_vowel_a.mp4) into my local repository:
+If FFmpeg is missing on macOS with Homebrew:
+  brew install ffmpeg
 
-Bash
-mkdir -p pronunciation/test_data
-cp /path/to/extracted/video.mp4 pronunciation/test_data/sample.mp4
-(Because we added pronunciation/test_data/ and *.mp4 to .gitignore, this file will not be tracked by Git).
+Confirm both local model files are present:
+  pronounciation/models/face_landmarker.task
+  pronounciation/models/blaze_face_full_range.tflite
 
-Step 2 - Actual code file, already there
-Step 3 - Run and test therough like the command line
+Enable camera and microphone access for your terminal/IDE. Use an environment
+with OpenCV window support. Whisper may download its model on first use.
 
-Step 4: Validate Against the Corpus Targets
-Open the extracted mouth patches in pronunciation/crops/ alongside Excel sheet of corpus:
+2. RECORD YOUR UTTERANCE
 
-If testing a vowel clip for /a/ (e.g., as in "heart"), verify that the script captures a distinct peak in aperture_px and aspect_ratio.
+  python -m pronounciation.test_webcam
 
-If testing /i/ (as in "bleed"), verify that stretch_px is elevated while aperture_px remains small.
+Focus an OpenCV window and press any key except lowercase q to start recording.
+Say the word or phrase with your lips clearly visible. Press the SAME key to stop.
+The recording needs at least 30 detected mouth frames before trimming; keep
+recording long enough to meet the displayed valid-frame count.
 
-Confirm that the generated image frames in pronunciation/crops/ cleanly isolate the oral cavity without cropping out the mouth corners (61, 291).
+In the terminal, enter exactly what you said. Leave the label empty to discard.
+Note the recording ID printed after saving. At the next terminal prompt, press
+Enter to record again, or type q and Enter to finish. Lowercase q in the OpenCV
+window quits and discards an active recording.
 
+For a successfully saved ID N, check:
+  pronounciation/test_data/dataset.csv
+  pronounciation/test_data/audio/recording_N.wav
+  pronounciation/test_data/video/recording_N.mp4
 
-TESTING compare.py FROM THE TERMINAL
+Check the terminal for save/conversion errors and the Whisper result. Review
+mismatches manually before using a capture as a reference or training example.
 
-Run these commands from the nabu repository root. The package folder is spelled
-pronounciation. Use two videos of the SAME word, with clearly visible lips.
-The paths below exist locally; confirm they contain the same word before comparing.
-Replace hello with the word actually spoken for the optional audio checks.
+3. REVIEW A SAVED RECORDING
 
-1. Activate the environment and install Python dependencies:
-source .venv/bin/activate
-pip install -r requirements.txt
+Replace 29 below with the ID printed during your recording:
+  python -m pronounciation.check_confidence 29
+  python -m pronounciation.view_trim 29
 
-2. Check FFmpeg (needed only for the optional audio check):
-ffmpeg -version
-If it is missing on macOS, install it with Homebrew:
-brew install ffmpeg
+Multiple IDs can be checked together:
+  python -m pronounciation.check_confidence 28 29 31
+  python -m pronounciation.view_trim 28 29 31
 
-3. See every supported command-line option:
-python -m pronounciation.compare --help
+Play the saved video on macOS:
+  open pronounciation/test_data/video/recording_29.mp4
 
-4. Compare lip movement using the default output PNG:
-python -m pronounciation.compare \
-  --user pronounciation/test_data/video/recording_29.mp4 \
-  --example pronounciation/test_data/video/example.mp4
+4. CHOOSE A REFERENCE VIDEO
 
-Default PNG: pronounciation/test_data/compare_result.png
-The terminal prints duration and start/middle/end mouth-shape feedback.
+Choose a clear video of the SAME word/phrase spoken correctly. You can record
+another take with step 2 or use an existing reference. Check the actual content
+rather than relying only on the filename or typed label.
 
-5. Choose a separate output PNG so earlier results are not overwritten:
-python -m pronounciation.compare \
-  --user pronounciation/test_data/video/recording_28.mp4 \
-  --example pronounciation/test_data/video/example.mp4 \
-  --out pronounciation/test_data/comparisons/recording_28.png
+The examples below use these local files; replace them with your chosen pair:
+  User:      pronounciation/test_data/video/recording_29.mp4
+  Reference: pronounciation/test_data/video/june.mp4
+  Word:      june
 
-6. Also check the spoken word using the matching microphone WAV:
-python -m pronounciation.compare \
-  --user pronounciation/test_data/video/recording_29.mp4 \
-  --example pronounciation/test_data/video/example.mp4 \
-  --user-wav pronounciation/test_data/audio/recording_29.wav \
-  --word hello \
-  --out pronounciation/test_data/comparisons/recording_29_audio.png
+The local june.mp4 and Kent.mp4 references have no audio stream. They can be
+used for visual comparison; use an audiovisual recording for transcription.
 
-7. Alternatively, check audio embedded in the MP4 (no separate WAV needed):
-python -m pronounciation.compare \
-  --user pronounciation/test_data/video/recording_29.mp4 \
-  --example pronounciation/test_data/video/example.mp4 \
-  --user-wav pronounciation/test_data/video/recording_29.mp4 \
-  --word hello \
-  --out pronounciation/test_data/comparisons/recording_29_embedded_audio.png
+5. COMPARE MOUTH MOVEMENT
 
-Both --user-wav and --word must be supplied to enable transcription.
-Whisper may download its model on first use. Audio preparation overwrites
-pronounciation/test_data/audio/_prepared_user.wav on each audio check.
+Show the supported options:
+  python -m pronounciation.compare --help
 
-8. Sanity check: compare a video against itself (shape errors should be near zero):
-python -m pronounciation.compare \
-  --user pronounciation/test_data/video/example.mp4 \
-  --example pronounciation/test_data/video/example.mp4 \
-  --out pronounciation/test_data/comparisons/self_check.png
+Run a comparison with the default word-named output:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --word june
 
-9. Open a result on macOS:
-open pronounciation/test_data/compare_result.png
-open pronounciation/test_data/comparisons/self_check.png
+Open the output on macOS:
+  open pronounciation/test_data/plots/june.png
 
-In the PNG, green is the example and red is your recording. The plots show
-mouth opening, width, overall shape difference, and the worst aligned lip shape.
-These are geometric differences, not a calibrated pronunciation accuracy score.
+For a custom output filename:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --out pronounciation/test_data/comparisons/recording_29.png
+
+Supply --word when using the default output, or supply --out for a custom path.
+Reusing an output path overwrites the previous plot. Read the terminal feedback
+and inspect the plot; interpretation and limitations are in file and roles.txt.
+
+6. COMPARE AND CHECK THE USER'S AUDIO
+
+Use the matching saved microphone WAV:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --user-wav pronounciation/test_data/audio/recording_29.wav \
+    --word june \
+    --out pronounciation/test_data/comparisons/recording_29_audio.png
+
+Alternatively, use audio embedded in the USER video:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --user-wav pronounciation/test_data/video/recording_29.mp4 \
+    --word june \
+    --out pronounciation/test_data/comparisons/recording_29_embedded_audio.png
+
+Both --user-wav and --word are needed to enable the audio check. Check the
+terminal's recognized text as well as the plot. These commands overwrite the
+scratch file pronounciation/test_data/audio/_prepared_user.wav on each audio run.
+
+7. OPTIONAL SELF-COMPARISON CHECK
+
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/recording_29.mp4 \
+    --out pronounciation/test_data/comparisons/self_check.png
+
+  open pronounciation/test_data/comparisons/self_check.png
+
+Expect very small shape differences when repeated detections are consistent.
+
+8. RUN THE SAME TESTS THROUGH THE API
+
+Start the server in an activated terminal:
+  python -m uvicorn pronounciation.api:app
+
+Open the interactive API documentation:
+  http://127.0.0.1:8000/docs
+
+In the documentation forms:
+  1) POST /recordings: upload the user MP4 using the video file field. Execute
+     and copy the returned UUID id.
+  2) POST /recordings: upload the reference MP4 and copy its UUID id.
+  3) Optional POST /recordings/{recording_id}/transcription: enter the USER UUID
+     and expected label, then Execute. The user's MP4 must contain audio.
+  4) POST /comparisons: enter user_id, example_id, and label in the query fields,
+     then Execute.
+  5) Open the returned png_url using the server address, for example:
+     http://127.0.0.1:8000/media/plots/june.png
+
+Use the UUIDs returned by upload, not the integer IDs from webcam recording.
+Repeated comparisons with the same sanitized label overwrite the same API plot.
+Stop the server with Ctrl+C when finished.
+
+9. OPTIONAL PRERECORDED CORPUS CROP TEST
+
+Corpus references for choosing a test clip:
+  Raw data: https://doi.org/10.6084/m9.figshare.24615378
+  Processed slices: https://doi.org/10.6084/m9.figshare.24612312
+  Corpus index: https://doi.org/10.6084/m9.figshare.24615705
+
+Choose an archive after checking its size, extract it, and use Corpus_index.xlsx
+when available to identify the utterance. Select an RGB video clip.
+
+Place it at the test entry point's expected location:
+  mkdir -p pronounciation/test_videos
+  cp /path/to/extracted/video.mp4 pronounciation/test_videos/sample_clip.mp4
+  python -m pronounciation.test_dataset_video
+
+Inspect the images in pronounciation/crops/ for both mouth corners and the full
+lip opening. Use a separate output folder when testing another clip in Python:
+  from pronounciation.test_dataset_video import process_dataset_clip
+  log = process_dataset_clip('path/to/clip.mp4', 'pronounciation/crops/my_clip')
+
+To compare a corpus clip with your recording, use its path as --example in
+steps 5/6, after confirming both clips contain the same utterance.
+
+10. OPTIONAL TRAINING-DATA PREPARATION COMMANDS
+
+Read the input schemas and path requirements in file and roles.txt first.
+These commands prepare data; there is no model training command in this folder.
+The current live dataset.csv is not accepted directly by the NPZ preprocessor.
+
+For an existing raw NPZ with the required keys (replace the placeholder path):
+  python -m pronounciation.preprocess_recordings \
+    --input path/to/raw_recording.npz \
+    --output-dir pronounciation/test_data/processed_webcam
+
+Before running either exporter, edit its input/output path constants for your
+machine and chosen data directory. Exports overwrite their destination CSV:
+  python -m pronounciation.export_csv
+  python -m pronounciation.export_normalized_csv
+
+Inspect Hugging Face metadata:
+  python -m pronounciation.huggingFaceTest
+
+For the Hugging Face commands below, first correct MODEL in each script for
+your machine. Their defaults use Windows-style paths, not the local models/
+path automatically. The preprocessor requires its model file already exists.
+
+Run the landmark diagnostic:
+  python -m pronounciation.test_hug_landmarks
+
+Prepare one clip with a preview:
+  python -m pronounciation.preprocess_hug_landmarks \
+    --limit 1 \
+    --preview \
+    --output-dir pronounciation/test_data/processed_hf_landmarks
+
+Use --limit 0 only when you intend to process all metadata rows. To export
+these outputs, explicitly point the normalized exporter's input constant to
+the Hugging Face output directory and choose a separate destination CSV.
