@@ -1,7 +1,106 @@
 from PIL import Image, ImageDraw, ImageFont
 import xml.etree.ElementTree as ET
 from svgpathtools import parse_path as parsePath
+from functools import lru_cache
 import math
+import os
+import numpy as np
+import cv2
+from scipy.spatial import cKDTree
+
+#Both the handwriting and the expected text are reduced to a grid whose longest side is this many cells,
+#so they're compared at the same resolution no matter how big the uploaded image is
+GRID_SIZE = 64
+#An image whose darkest and lightest pixels are closer than this is treated as blank
+MIN_CONTRAST = 64
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+
+#Picks a threshold that best separates ink from paper using Otsu's method (maximizes the variance between the two groups).
+#Adapts to pencil, grey pens, and lighting instead of relying on a fixed cutoff.
+def otsuThreshold(gray):
+    hist = np.bincount(gray.ravel(), minlength=256).astype(float)
+    levels = np.arange(256)
+    weightDark = np.cumsum(hist)
+    weightLight = weightDark[-1] - weightDark
+    sumDark = np.cumsum(hist * levels)
+    meanDark = sumDark / np.maximum(weightDark, 1)
+    meanLight = (sumDark[-1] - sumDark) / np.maximum(weightLight, 1)
+    between = weightDark * weightLight * (meanDark - meanLight) ** 2
+    #Pixels at or below the best level are ink, so the cutoff for "gray < threshold" is one above it
+    return int(np.argmax(between)) + 1
+
+#Resizes a boolean mask so its longest side is target pixels. Shrinking marks a pixel as ink if ANY source pixel
+#landing in it is ink (so thin strokes survive), growing uses nearest neighbor.
+def fitMask(mask, target):
+    height, width = mask.shape
+    scale = target / max(height, width)
+    newHeight, newWidth = max(1, round(height * scale)), max(1, round(width * scale))
+    if scale >= 1:
+        return np.asarray(Image.fromarray(mask).resize((newWidth, newHeight), Image.NEAREST))
+    ys, xs = np.nonzero(mask)
+    out = np.zeros((newHeight, newWidth), dtype=bool)
+    out[np.minimum((ys * scale).astype(int), newHeight - 1), np.minimum((xs * scale).astype(int), newWidth - 1)] = True
+    return out
+
+#Converts a boolean ink mask (True = ink) into points on a grid whose longest side is size cells, in the mask's pixel space.
+#The ink is cropped and scaled to the same size every time, so image size and margins don't matter, and thinned to
+#1px wide centerlines, so pen thickness doesn't matter. What's left to compare is where the strokes are.
+def inkToPoints(ink, size=GRID_SIZE):
+    ys, xs = np.nonzero(ink)
+    if len(xs) == 0:
+        return []
+
+    #Crop to the bounding box of the ink
+    top, left = ys.min(), xs.min()
+    ink = ink[top:ys.max() + 1, left:xs.max() + 1]
+    extent = max(ink.shape)
+
+    #Thin at a higher resolution than the grid so the centerlines are accurate, then reduce them to the grid
+    detailed = fitMask(ink, size * 4)
+    skeleton = cv2.ximgproc.thinning(detailed.astype(np.uint8) * 255) > 0
+    cells = fitMask(skeleton, size)
+
+    #Map grid cells back to the original pixel space (cell centers)
+    cellSize = extent / max(cells.shape)
+    cellYs, cellXs = np.nonzero(cells)
+    return [(float(left + (x + 0.5) * cellSize), float(top + (y + 0.5) * cellSize)) for y, x in zip(cellYs, cellXs)]
+
+#Returns a font that can draw the given text, chosen by writing system. Falls back to Pillow's default font if the file is missing.
+@lru_cache(maxsize=None)
+def fontFor(text, size):
+    def has(start, end):
+        return any(start <= ord(ch) <= end for ch in text)
+
+    if has(0x3040, 0x30FF):
+        name = 'NotoSansCJKjp-Regular.otf' #Japanese kana
+    elif has(0xAC00, 0xD7AF) or has(0x1100, 0x11FF):
+        name = 'NotoSansCJKkr-Regular.otf' #Korean hangul
+    elif has(0x3400, 0x9FFF) or has(0xF900, 0xFAFF):
+        name = 'NotoSansCJKsc-Regular.otf' #Chinese characters
+    elif has(0x0600, 0x06FF):
+        name = 'NotoNaskhArabic-Regular.ttf'
+    elif has(0x0590, 0x05FF):
+        name = 'NotoSansHebrew-Regular.ttf'
+    elif has(0x0900, 0x097F):
+        name = 'NotoSansDevanagari-Regular.ttf'
+    else:
+        name = 'NotoSans-Regular.ttf'
+
+    path = os.path.join(FONT_DIR, name)
+    if os.path.exists(path):
+        return ImageFont.truetype(path, size)
+    return ImageFont.load_default(size=size)
+
+#For each point in fromPoints, finds the distance and angle (radians, 0 to 2π) to its nearest point in toPoints.
+#Uses a k-d tree so this is O(N log M) instead of comparing every pair.
+def findNearest(fromPoints, toPoints):
+    fromArr = np.asarray(fromPoints, dtype=float)
+    toArr = np.asarray(toPoints, dtype=float)
+    dists, indices = cKDTree(toArr).query(fromArr)
+    diffs = toArr[indices] - fromArr
+    angles = np.arctan2(diffs[:, 1], diffs[:, 0]) % (2 * math.pi)
+    return dists.tolist(), angles.tolist()
+
 
 #Converts an SVG file into a list of points representing the paths and shapes within the SVG.
 def extractSvgPoints(textSvg, segments=5):
@@ -46,29 +145,52 @@ def extractSvgPoints(textSvg, segments=5):
                 continue
     return points
 
-#Converts a text string into a list of points representing the pixels of the rendered text. Designed for a single character in mind but should work with more characters as well.
-def extractTextPoints(text, size=32):
-    #Create a blank image to render the text on
-    img = Image.new('1', (size*2*len(text), size*2), color=0)
+#Converts a raster image (png, jpg, ...) into a list of points where the image is dark (the ink), in the original image's pixel space.
+#Dark ink on a light background is expected. Pass threshold (0-255) to override the automatic ink/paper cutoff.
+def extractImagePoints(image, size=GRID_SIZE, threshold=None):
+    img = Image.open(image)
 
-    #Setup the drawing context and font for rendering the text
+    #Flatten transparency onto white so transparent backgrounds don't count as ink
+    if img.mode in ('RGBA', 'LA', 'P'):
+        img = img.convert('RGBA')
+        background = Image.new('RGBA', img.size, (255, 255, 255, 255))
+        img = Image.alpha_composite(background, img)
+    gray = np.asarray(img.convert('L'))
+
+    #Too little contrast to contain any writing (blank or near-blank image)
+    if int(gray.max()) - int(gray.min()) < MIN_CONTRAST:
+        return []
+
+    #Decide what counts as ink at full resolution, before any downscaling can wash thin strokes out
+    if threshold is None:
+        threshold = otsuThreshold(gray)
+    return inkToPoints(gray < threshold, size)
+
+#Picks the right point extractor based on the file's contents (svg text vs raster image). Accepts a path or an open binary file
+def extractPoints(file):
+    if isinstance(file, (str, os.PathLike)):
+        with open(file, 'rb') as f:
+            return extractPoints(f)
+    head = file.read(512)
+    file.seek(0)
+    if b'<svg' in head or b'<?xml' in head:
+        return extractSvgPoints(file)
+    return extractImagePoints(file)
+
+#Converts a text string into a list of points representing the pixels of the rendered text, using a font that covers its writing system.
+#Designed for a single character in mind but should work with more characters as well.
+def extractTextPoints(text, size=GRID_SIZE):
+    #Render well above the grid size so the glyph shape is accurate before it gets reduced to the grid
+    fontSize = size * 4
+    font = fontFor(text, fontSize)
+
+    #Create a blank image big enough for the text and render it
+    img = Image.new('L', (fontSize * 2 * max(len(text), 1), fontSize * 2), color=0)
     draw = ImageDraw.Draw(img)
-    font = ImageFont.load_default(size=size)
-    bbox = draw.textbbox((0, 0), text, font=font)
-    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    draw.text((fontSize // 2, fontSize // 2), text, font=font, fill=255)
 
-    #Render the text onto the image
-    draw.text((size // 2, size // 2), text, font=font, fill=1)
-
-    #Convert the image into points where the text exists
-    pixels = img.load()
-    points = [
-        (x, y) 
-        for y in range(size * 2) 
-        for x in range(size * 2 * len(text)) 
-        if pixels[x, y] == 1
-    ]
-    return points
+    #Reduce to the same grid as the handwriting so both sides are compared at the same resolution
+    return inkToPoints(np.asarray(img) > 127, size)
 
 #Normalizes a list of points to the range [0, 1] and returns the normalized points along with the original bounding box.
 def normalize(data): 
@@ -117,36 +239,19 @@ def findAngle(point1, point2):
 #Warning, this is O(M*N) where M is the number of points in the text SVG and N is the number of points in the expected text.
 def findError(textSvg, expected):
     #Extract and normalize the points from the text SVG and the expected text
-    textPoints, normSize = normalize(extractSvgPoints(textSvg))
+    textPoints, normSize = normalize(extractPoints(textSvg))
     expectedPoints, _ = normalize(extractTextPoints(expected))
 
-    #Find the point in the text SVG that is furthest from any point in the expected text
-    dists = []
-    angles = []
-    points = []
-    for textPoint in textPoints:
-        minAngle = 0
-        minDist = float('inf')
-        for exp in expectedPoints:
-            dist = (textPoint[0] - exp[0])**2 + (textPoint[1] - exp[1])**2
-            if dist < minDist:
-                minDist = dist
-                minAngle = findAngle(textPoint, exp)
-        dists.append(math.sqrt(minDist))
-        angles.append(minAngle)
-        points.append(textPoint)
-    #Find the point in the expected text that is furthest from any point in the text SVG
-    for expectedPoint in expectedPoints: 
-        minAngle = 0
-        minDist = float('inf')
-        for textPoint in textPoints:
-            dist = (textPoint[0] - expectedPoint[0])**2 + (textPoint[1] - expectedPoint[1])**2
-            if dist < minDist:
-                minDist = dist
-                minAngle = findAngle(expectedPoint, textPoint)
-        dists.append(math.sqrt(minDist))
-        angles.append(minAngle)
-        points.append(expectedPoint)
+    #Nothing to compare against (blank image or unrenderable text)
+    if not textPoints or not expectedPoints:
+        return [], [], normSize, []
+
+    #Distance from each handwriting point to the nearest expected point, and vice versa
+    textDists, textAngles = findNearest(textPoints, expectedPoints)
+    expectedDists, expectedAngles = findNearest(expectedPoints, textPoints)
+    points = textPoints + expectedPoints
+    dists = textDists + expectedDists
+    angles = textAngles + expectedAngles
 
     #Renormalize points so that it accurately reflects where the error occurred in the original coordinate space
     for i in range(len(points)): 
@@ -252,6 +357,7 @@ def combineOne(points, sizes):
     return False, None, None, None, None
 
 #Iteratively combines points based on their sizes and distances until no more combinations can be made, returning the new points and sizes after all possible combinations.
+#Before calling, it is REQUIRED that the errorData has been culled to some extent, in order to prevent excessive combining of irrelevant points.
 def combineAndTransform(errorData): 
     points, sizes = transformPoints(errorData)
     while True: 
