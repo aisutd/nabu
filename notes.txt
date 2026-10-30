@@ -1,0 +1,266 @@
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------- What I need to do now:------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+python3 -m venv .venv
+To run the whole thing: source .venv/bin/activate
+
+if wanna pull from a different branch when starting the session
+git fetch origin
+git status
+
+git push origin HEAD
+git fetch origin
+git switch feats/pronounciation-data-pipeline
+git pull origin feats/pronounciation-data-pipeline
+
+
+To run the file:
+python -m pronounciation.test_webcam
+
+To run the API server for testing:
+python -m uvicorn pronounciation.api:app       
+http://127.0.0.1:8000/docs#/default/comparison_comparisons_post
+
+
+Done:
+- Track and display the mouth crop, lip points, bounding box, aperture, stretch, and aspect ratio. Return 40 XYZ lip landmarks per frame as a float32 (40, 3) array, with x/y normalized to the full frame and z scaled by the face-to-frame width ratio.
+- Start recording with any key except q in the OpenCV window; press the same key to stop. Show a red REC indicator and valid-frame count, and count frames where no mouth is detected.
+- Record microphone audio alongside landmarks at 16 kHz, mono, 16-bit PCM. Reject recordings with fewer than 30 valid landmark frames; an empty label or quitting during capture also discards the recording.
+- Append labeled landmark frames to pronounciation/test_data/dataset.csv, with frame index, elapsed timestamp, 120 XYZ columns, and an incrementing recording_id. Labels are trimmed and lowercased. Skipped frames are reported in the terminal but are not saved in the CSV.
+- Save audio to pronounciation/test_data/audio/recording_<recording_id>.wav, linking each WAV to its landmark recording by ID.
+- Added preprocessing for existing NPZ recordings: center landmarks on the mouth corners, scale by the recording's median mouth width, and resample single-word recordings to 29 frames. A separate exporter writes normalized 29-frame sequences to CSV. These scripts still use the older NPZ input workflow, rather than the live recorder's dataset.csv.
+- Label entry and the prompt to record another word still happen in the terminal.
+- Trim idle frames; falling below 29/30 FPS is acceptable for training.
+- Incorporate audio to distinguish sounds such as b and p, using Whisper for transcription.
+- incremental plotting for the tests
+- if anything other than q or enter is pressed when "Record another word? Press Enter to continue, or type q and Enter to quit:" is prompted it glitches. fix that
+
+Next:
+  - once Aron trains the model and pushes his code to gihub, merge his branch to mine
+    - modularize the code (make sub folders and shi)
+      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+For file explanations, workflow details, data formats, and limitations, see:
+  pronounciation/file and roles.txt
+
+Use the run instructions below from the nabu repository root. The package folder
+is spelled pronounciation.
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------- HOW to run according to gemini on the medical collection thingy ------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+PRONOUNCIATION RUN GUIDE — RECORDING, REVIEW, AND COMPARISON
+
+1. SET UP THE ENVIRONMENT
+
+Create the virtual environment if it does not already exist:
+  python3 -m venv .venv
+
+Activate it and install dependencies:
+  source .venv/bin/activate
+  python -m pip install -r requirements.txt
+
+Check FFmpeg:
+  ffmpeg -version
+
+If FFmpeg is missing on macOS with Homebrew:
+  brew install ffmpeg
+
+Confirm both local model files are present:
+  pronounciation/models/face_landmarker.task
+  pronounciation/models/blaze_face_full_range.tflite
+
+Enable camera and microphone access for your terminal/IDE. Use an environment
+with OpenCV window support. Whisper may download its model on first use.
+
+2. RECORD YOUR UTTERANCE
+
+  python -m pronounciation.test_webcam
+
+Focus an OpenCV window and press any key except lowercase q to start recording.
+Say the word or phrase with your lips clearly visible. Press the SAME key to stop.
+The recording needs at least 30 detected mouth frames before trimming; keep
+recording long enough to meet the displayed valid-frame count.
+
+In the terminal, enter exactly what you said. Leave the label empty to discard.
+Note the recording ID printed after saving. At the next terminal prompt, press
+Enter to record again, or type q and Enter to finish. Lowercase q in the OpenCV
+window quits and discards an active recording.
+
+For a successfully saved ID N, check:
+  pronounciation/test_data/dataset.csv
+  pronounciation/test_data/audio/recording_N.wav
+  pronounciation/test_data/video/recording_N.mp4
+
+Check the terminal for save/conversion errors and the Whisper result. Review
+mismatches manually before using a capture as a reference or training example.
+
+3. REVIEW A SAVED RECORDING
+
+Replace 29 below with the ID printed during your recording:
+  python -m pronounciation.check_confidence 29
+  python -m pronounciation.view_trim 29
+
+Multiple IDs can be checked together:
+  python -m pronounciation.check_confidence 28 29 31
+  python -m pronounciation.view_trim 28 29 31
+
+Play the saved video on macOS:
+  open pronounciation/test_data/video/recording_29.mp4
+
+4. CHOOSE A REFERENCE VIDEO
+
+Choose a clear video of the SAME word/phrase spoken correctly. You can record
+another take with step 2 or use an existing reference. Check the actual content
+rather than relying only on the filename or typed label.
+
+The examples below use these local files; replace them with your chosen pair:
+  User:      pronounciation/test_data/video/recording_29.mp4
+  Reference: pronounciation/test_data/video/june.mp4
+  Word:      june
+
+The local june.mp4 and Kent.mp4 references have no audio stream. They can be
+used for visual comparison; use an audiovisual recording for transcription.
+
+5. COMPARE MOUTH MOVEMENT
+
+Show the supported options:
+  python -m pronounciation.compare --help
+
+Run a comparison with the default word-named output:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --word june
+
+Open the output on macOS:
+  open pronounciation/test_data/plots/june.png
+
+For a custom output filename:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --out pronounciation/test_data/comparisons/recording_29.png
+
+Supply --word when using the default output, or supply --out for a custom path.
+Reusing an output path overwrites the previous plot. Read the terminal feedback
+and inspect the plot; interpretation and limitations are in file and roles.txt.
+
+6. COMPARE AND CHECK THE USER'S AUDIO
+
+Use the matching saved microphone WAV:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --user-wav pronounciation/test_data/audio/recording_29.wav \
+    --word june \
+    --out pronounciation/test_data/comparisons/recording_29_audio.png
+
+Alternatively, use audio embedded in the USER video:
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/june.mp4 \
+    --user-wav pronounciation/test_data/video/recording_29.mp4 \
+    --word june \
+    --out pronounciation/test_data/comparisons/recording_29_embedded_audio.png
+
+Both --user-wav and --word are needed to enable the audio check. Check the
+terminal's recognized text as well as the plot. These commands overwrite the
+scratch file pronounciation/test_data/audio/_prepared_user.wav on each audio run.
+
+7. OPTIONAL SELF-COMPARISON CHECK
+
+  python -m pronounciation.compare \
+    --user pronounciation/test_data/video/recording_29.mp4 \
+    --example pronounciation/test_data/video/recording_29.mp4 \
+    --out pronounciation/test_data/comparisons/self_check.png
+
+  open pronounciation/test_data/comparisons/self_check.png
+
+Expect very small shape differences when repeated detections are consistent.
+
+8. RUN THE SAME TESTS THROUGH THE API
+
+Start the server in an activated terminal:
+  python -m uvicorn pronounciation.api:app
+
+Open the interactive API documentation:
+  http://127.0.0.1:8000/docs
+
+In the documentation forms:
+  1) POST /recordings: upload the user MP4 using the video file field. Execute
+     and copy the returned UUID id.
+  2) POST /recordings: upload the reference MP4 and copy its UUID id.
+  3) Optional POST /recordings/{recording_id}/transcription: enter the USER UUID
+     and expected label, then Execute. The user's MP4 must contain audio.
+  4) POST /comparisons: enter user_id, example_id, and label in the query fields,
+     then Execute.
+  5) Open the returned png_url using the server address, for example:
+     http://127.0.0.1:8000/media/plots/june.png
+
+Use the UUIDs returned by upload, not the integer IDs from webcam recording.
+Repeated comparisons with the same sanitized label overwrite the same API plot.
+Stop the server with Ctrl+C when finished.
+
+9. OPTIONAL PRERECORDED CORPUS CROP TEST
+
+Corpus references for choosing a test clip:
+  Raw data: https://doi.org/10.6084/m9.figshare.24615378
+  Processed slices: https://doi.org/10.6084/m9.figshare.24612312
+  Corpus index: https://doi.org/10.6084/m9.figshare.24615705
+
+Choose an archive after checking its size, extract it, and use Corpus_index.xlsx
+when available to identify the utterance. Select an RGB video clip.
+
+Place it at the test entry point's expected location:
+  mkdir -p pronounciation/test_videos
+  cp /path/to/extracted/video.mp4 pronounciation/test_videos/sample_clip.mp4
+  python -m pronounciation.test_dataset_video
+
+Inspect the images in pronounciation/crops/ for both mouth corners and the full
+lip opening. Use a separate output folder when testing another clip in Python:
+  from pronounciation.test_dataset_video import process_dataset_clip
+  log = process_dataset_clip('path/to/clip.mp4', 'pronounciation/crops/my_clip')
+
+To compare a corpus clip with your recording, use its path as --example in
+steps 5/6, after confirming both clips contain the same utterance.
+
+10. OPTIONAL TRAINING-DATA PREPARATION COMMANDS
+
+Read the input schemas and path requirements in file and roles.txt first.
+These commands prepare data; there is no model training command in this folder.
+The current live dataset.csv is not accepted directly by the NPZ preprocessor.
+
+For an existing raw NPZ with the required keys (replace the placeholder path):
+  python -m pronounciation.preprocess_recordings \
+    --input path/to/raw_recording.npz \
+    --output-dir pronounciation/test_data/processed_webcam
+
+Before running either exporter, edit its input/output path constants for your
+machine and chosen data directory. Exports overwrite their destination CSV:
+  python -m pronounciation.export_csv
+  python -m pronounciation.export_normalized_csv
+
+Inspect Hugging Face metadata:
+  python -m pronounciation.huggingFaceTest
+
+For the Hugging Face commands below, first correct MODEL in each script for
+your machine. Their defaults use Windows-style paths, not the local models/
+path automatically. The preprocessor requires its model file already exists.
+
+Run the landmark diagnostic:
+  python -m pronounciation.test_hug_landmarks
+
+Prepare one clip with a preview:
+  python -m pronounciation.preprocess_hug_landmarks \
+    --limit 1 \
+    --preview \
+    --output-dir pronounciation/test_data/processed_hf_landmarks
+
+Use --limit 0 only when you intend to process all metadata rows. To export
+these outputs, explicitly point the normalized exporter's input constant to
+the Hugging Face output directory and choose a separate destination CSV.

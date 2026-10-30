@@ -1,0 +1,1101 @@
+PRONOUNCIATION: FILES, ROLES, DATA CONTRACTS, AND COMPLETE PIPELINE GUIDE
+====================================================================
+Source and local artifact review: October 28, 2026.
+All paths below are relative to the repository root unless stated otherwise.
+The actual package spelling is pronounciation; commands must use that spelling.
+
+PURPOSE AND ACCURACY BOUNDARIES
+-------------------------------
+This document describes the implementation currently present, including its
+unfinished connections. It does not assume that comments, old run notes, file
+names, typed labels, or pretrained model outputs prove pronunciation correctness.
+Python source was read, CSV structure was checked, WAV headers were inspected,
+and local MP4 stream metadata was inspected with ffprobe. No camera session,
+Hugging Face download, transcription inference, or model training was performed
+for this documentation. Media contents were not manually listened to or labeled.
+Artifact listings are a snapshot and will change as recordings are added.
+
+The folder contains capture, landmark inference, audio transcription, geometric
+comparison, and training-data preparation. There is NO training loop, train/test
+split builder, loss function, optimizer, trained word classifier, phoneme scorer,
+or audiovisual fusion model in this folder. MediaPipe and Whisper are used as
+pretrained inference tools. Preparing 29-frame inputs is preparation for possible
+training, not training itself. A successful Whisper text match is not a calibrated
+pronunciation score, and a small mouth-shape error does not prove correct speech.
+
+This guide covers every Python source file, both model assets, the CSV, local
+video artifacts, bytecode, macOS metadata, and this documentation file. Individual
+WAV and PNG artifact descriptions are omitted.
+
+1. THE FOUR WORKFLOWS AND THEIR CONNECTIONS
+==========================================
+
+A. Live webcam collection (the current working data-writing route)
+
+  test_webcam.main
+    -> cv2.VideoCapture(0) supplies full BGR frames
+    -> detector.MouthTracker.process_frame
+         -> BlazeFace detects a face region
+         -> FaceLandmarker estimates face landmarks inside that region
+         -> metrics computes pixel measurements and a mouth crop
+         -> returns 40 lip XYZ points normalized to the full image
+    -> AudioRecorder captures microphone PCM concurrently
+    -> VideoRecorder buffers full frames as JPEGs while recording
+    -> on stop: reject if fewer than 30 valid landmark frames
+    -> trim.trim_idle slices leading/trailing landmark inactivity
+    -> prompt for a label; empty label discards the buffers
+    -> recorder.save_recording appends the trimmed points to dataset.csv
+    -> AudioRecorder.save writes recording_<id>.wav
+    -> VideoRecorder.save writes recording_<id>.mp4
+    -> video_record.add_audio muxes the WAV into the MP4
+    -> transcribe.check compares recognized words with the typed label
+
+  Important: this route does NOT write raw NPZ recordings, normalize for training,
+  resample to 29 frames, choose a reference, run compare(), or train a model.
+  It records and displays live input; comparison happens later on saved videos.
+
+B. Existing NPZ collection -> possible training inputs (older interface)
+
+  externally supplied test_data/recordings/*.npz
+    -> preprocess_recordings.preprocess_file
+    -> centered/scaled XYZ sequence, plus 29-frame sequence for one-token labels
+    -> <stem>_processed.npz
+    -> export_normalized_csv.main -> normalized 29-frame CSV
+
+  export_csv.py is an alternative RAW NPZ-to-CSV exporter, before normalization.
+  The current live recorder writes dataset.csv directly instead of these NPZs.
+  There is no CSV-to-NPZ bridge here and no local test_data/recordings directory
+  in the reviewed snapshot. Running the preprocessing scripts immediately after
+  live capture does not automatically pick up that newly captured CSV recording.
+
+C. Prerecorded Hugging Face videos -> possible training inputs
+
+  huggingFaceTest.hug (optional metadata inspection)
+    -> remote merged_metadata.json identifies source_folder/text/index
+  preprocess_hug_landmarks.main
+    -> download <source_folder>/video.mp4 via huggingface_hub
+    -> direct FaceLandmarker inference on every original video frame
+    -> select the same ordered 40 lip landmarks
+    -> normalize_landmarks / resample_sequence from preprocess_recordings
+    -> <source_folder>_processed.npz (+ optional preview PNG)
+
+  These files can hold landmarks_29, but no automatic training consumer follows.
+  The normalized CSV exporter defaults to the WEBcam processed directory. To
+  export Hugging Face outputs, its input directory must be deliberately changed
+  to that output directory and the expected schemas validated. It has no CLI
+  option for changing its input path. Do not assume all prepared data is combined.
+
+D. Prerecorded/local/uploaded videos -> comparison and feedback
+
+  CLI: compare.main -> video_input.landmarks_from_video for user and reference
+    -> trim.active_range -> compare.normalize -> DTW -> report + plot
+  API: upload MP4s -> /comparisons -> same extraction and compare functions
+    -> JSON curves, durations, shape errors, and a PNG URL
+  Optional audio: prepare_wav -> transcribe.check, independently of geometry.
+
+  Saved webcam MP4s can be inputs to this prerecorded route. The route re-runs
+  detection from pixels; it does not load saved CSV landmarks or processed NPZs.
+  test_dataset_video is a separate crop/measurement inspection tool, not the
+  training preprocessor. test_hug_landmarks is a detection feasibility diagnostic.
+
+2. SHARED DATA CONTRACTS: WHAT THE NUMBERS ACTUALLY MEAN
+======================================================
+
+2.1 Landmark identity and ordering
+
+config.py defines MediaPipe vertex IDs, not sequential array positions:
+  Outer contour (positions 0-19):
+  61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146
+  Inner contour (positions 20-39):
+  78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95
+
+ALL_LIP_INDICES is the concatenated int32 array of those 40 IDs. Each contour
+contains 20 entries; the repeated endpoint used to draw a closed loop is not
+stored. The important anchors are corner IDs 61 and 291 and inner lip IDs 13
+and 14. Their positions in a saved 40-point array are 0, 10, 25, and 35,
+respectively. Never index a saved 40-point array with MediaPipe ID 291.
+The _POS/SAVED_INDEX dictionaries translate IDs into these array positions.
+
+2.2 Detector output and coordinate systems
+
+MouthTracker.process_frame(frame_bgr) returns (crop, metrics, pts).
+Failure to find a face or landmarks returns (None, None, None).
+
+  crop: BGR image cut from the original full frame, with mouth padding.
+  pts: int32 (40,2) drawing points in FULL-FRAME PIXELS, [x,y].
+  metrics: aperture_px, stretch_px, aspect_ratio, bbox, landmarks.
+  bbox: [x1,y1,x2,y2] full-frame pixels; end bounds are exclusive for slicing.
+  metrics['landmarks']: float32 (40,3), FULL-FRAME NORMALIZED XYZ.
+
+For full image W,H, face-region origin fx1,fy1 and region dimensions FW,FH,
+a face-landmarker point x_f,y_f,z_f is mapped to:
+  x = (fx1 + x_f * FW) / W
+  y = (fy1 + y_f * FH) / H
+  z = z_f * FW / W
+
+x and y use different image dimensions. z is MediaPipe relative depth scaled
+by the face/full-image width ratio; it is not a measured distance in meters.
+Do not treat these XYZ triples as physical 3D coordinates. Predictions need
+not be strictly confined to [0,1]. Image y increases downward.
+
+The crop and pts are for image inspection. Live CSV capture and comparison
+use metrics['landmarks']; test_dataset_video logs pts instead. These are NOT
+interchangeable representations. Moving/resizing a mouth crop does not change
+the coordinate contract of the full-frame landmarks.
+
+2.3 Measurements
+
+metrics.compute_phonetic_metrics takes the full landmarker list and the image
+region's width/height, not a saved 40-point array. The detector passes face-region
+dimensions, which convert its region-relative points into pixel differences:
+  aperture_px = abs((y14-y13) * region_height)
+  stretch_px = abs((x291-x61) * region_width)
+  aspect_ratio = aperture_px / (stretch_px + 0.000001)
+
+These are vertical and horizontal differences, not rotation-corrected Euclidean
+mouth distances. They are useful display measurements, not phoneme predictions.
+The lip aspect ratio above is different from video_input's image aspect H/W.
+
+2.4 Live CSV layout
+
+recorder writes 124 columns:
+  label, frame, timestamp_ms,
+  lm61_x,lm61_y,lm61_z, ... all 40 points in config order ...,
+  recording_id
+
+There are 120 coordinate columns and one row per retained detected frame.
+Coordinates are serialized to six decimal places. label is stripped/lowercased.
+frame is reassigned 0..N-1 after trimming, not the original camera frame index.
+timestamp_ms retains elapsed time from capture start, even after trimming; it
+need not start at zero. Blank rows separate recordings and are not observations.
+The integer recording_id links CSV rows to recording_<id>.wav/.mp4. Missing mouth
+frames produce no row, so timestamp gaps can remain. skipped is accepted by
+save_recording but is not stored. Image size, FPS, audio start offset, camera
+frame number, and model version are also not recorded in this CSV.
+
+2.5 Three different meanings of normalization
+
+  Detector: converts face-region outputs to full-image normalized coordinates.
+  preprocess_recordings.normalize_landmarks: centers XYZ on the per-frame
+    midpoint of the corners, divides all coordinates by one median XY corner
+    distance over the clip. Keeps z; does not correct image aspect or rotate.
+  compare.normalize: discards z, multiplies y by H/W, centers XY per frame,
+    rotates corners level, scales by the median rotated corner width.
+
+The last two functions preserve relative width changes using one clip-wide
+scale, instead of forcing every frame's mouth width to one. They nevertheless
+produce different representations and must not be substituted silently.
+Training preprocessing is not fully invariant to image aspect, roll, yaw,
+perspective, expression, or detector differences. Sharing a helper between
+webcam and Hugging Face does not guarantee identical input distributions.
+
+2.6 Frame count, FPS, duration, and resampling
+
+30 valid frames is the capture/preprocessing acceptance rule, not a 30 FPS rule.
+29 frames is a target sequence LENGTH for isolated-word preparation, not FPS.
+At roughly 15 FPS, 30 frames takes roughly two seconds; shorter/faster speech
+may still be rejected even if the word was said clearly.
+Linear resampling interpolates each coordinate at 29 evenly spaced times.
+It neither creates new measured observations nor uses audio/phoneme boundaries.
+DTW comparison does not resample to 29 frames: it aligns variable-length clips.
+
+3. EACH PYTHON SOURCE FILE IN DETAIL
+====================================
+
+3.1 __init__.py
+----------------
+Empty package initializer. Enables conventional package imports and -m module
+execution. It loads no models, starts no capture, and performs no preprocessing.
+It supports all workflows structurally rather than processing speech itself.
+
+3.2 config.py
+--------------
+Central source for ordered lip IDs, four anchor IDs, DEFAULT_PADDING=25 pixels,
+and the two model paths under pronounciation/models. Imported throughout detection,
+measurement, recording, preprocessing, exports, trimming, comparison, and tests.
+Changing the ordered IDs changes every saved feature's meaning and CSV schema;
+changing only a model path does not convert existing data. Defaults resolve from
+the working directory, so use repository-root commands. It performs no inference.
+
+3.3 metrics.py
+---------------
+compute_phonetic_metrics returns three Python floats using the formulas above.
+extract_mouth_crop(frame, landmarks, padding=25) selects the 40 lip coordinates,
+converts them to that frame's pixels, computes integer min/max bounds, applies
+padding and image bounds, slices frame[y1:y2,x1:x2], and returns crop/box/points.
+The tracker calls it on the FACE region with padding=0, then translates the box
+and points and applies 25-pixel padding in the FULL frame. Keeping these two
+steps distinct avoids mistakenly treating face-region coordinates as global.
+Used by both live capture and the shared prerecorded MouthTracker route; not
+used by direct Hugging Face preprocessing, which extracts normalized points
+without producing these crop metrics.
+
+3.4 detector.py
+----------------
+MouthTracker owns a FaceDetector and FaceLandmarker. Constructor checks both
+asset files, rejects detection_interval < 1, and initializes cached face bounds.
+Defaults: face_margin=0.25, detection_interval=1, face detector confidence=0.5,
+landmarker num_faces=1. Both tasks run synchronously in IMAGE mode. There is
+no MediaPipe VIDEO/LIVE_STREAM mode, asynchronous callback, or timestamp passed
+to inference. Here 'tracker' means the wrapper and optional region cache.
+
+_detect_face_bounds receives full RGB pixels, chooses the FIRST detected face,
+adds 25% of its detected width/height on EACH corresponding side, clips the
+box to the image, and returns positive-size bounds or None. It does not choose
+a known speaker or the largest face. Keep other faces out of the scene.
+
+process_frame converts BGR to RGB. It redetects when bounds are absent, image
+size changed, or the frame count reaches the configured interval. Default 1
+redetects each frame. Larger intervals reuse bounds, but landmarks still run
+every frame. Landmark failure clears bounds for reacquisition next frame.
+The region is contiguous RGB for MediaPipe. Crop/metrics/points are calculated
+and translated as described in section 2. close() closes BOTH tasks.
+
+Used by test_webcam, test_dataset_video, video_input, compare, and API comparison.
+The Hugging Face scripts bypass this face-first region wrapper. Thus their
+failure behavior and detection context differ even though lip IDs match.
+
+3.5 test_webcam.py
+-------------------
+Interactive live data collector, despite its test_ name; not an automated unit
+test. main creates tracker/audio/video objects, opens camera 0, requests 1280x720
+(actual camera resolution can differ), and displays camera and mouth windows.
+Each frame is processed even before recording, to show tracking feedback.
+
+With an OpenCV window focused, any returned key except lowercase q starts
+recording. The exact same key stops it; other keys do not stop it. q quits and
+discards an active capture. waitKey's idle -1 becomes 255 after the byte mask
+and is explicitly ignored. Terminal prompts and GUI keys are different inputs.
+
+Start order is audio.start(), video.start(), reset buffers, then time.time()
+for landmark elapsed timestamps. While recording, video.add(frame) receives
+EVERY captured frame, including those without a valid mouth. Valid detections
+append normalized landmarks plus elapsed milliseconds; failures increment
+skipped. The video frame is added before drawing the HUD, red dots, and box,
+so these current-frame overlays are not intentionally burned into the buffer.
+
+On the stop key: audio.stop(), then check >=30 valid frames BEFORE trim_idle.
+Short captures discard audio/video. Accepted captures trim landmarks/timestamps,
+then ask for the spoken label in the terminal. No second 30-frame check occurs
+after trimming. Therefore a saved CSV recording can contain fewer than 30 rows.
+There is no word/sentence validation beyond nonempty stripped input.
+
+For a label, saves occur in this order: CSV -> WAV -> video -> mux audio ->
+Whisper text check. A mismatch prints a warning; it does not reject, relabel,
+or remove the saved data. A spelling/nonsense label can still be saved.
+Buffers are discarded after saving or rejecting; record_another accepts empty
+Enter to continue, q to quit, and re-prompts for other terminal input.
+
+Only landmark arrays/timestamps are trimmed. Audio and video keep their captured
+intervals; CSV timestamps are not rebased. No sample-accurate synchronization
+or trimmed media output is implemented. Video encoding uses a mean FPS, not
+original variable frame timing. The microphone started_ns property is unused.
+
+Normal exit discards buffers, releases the camera, closes tasks and windows.
+The whole function is not wrapped in try/finally: an exception during recording,
+saving, muxing, or transcription can bypass that cleanup. Saves are not atomic
+across three files; a failed later step can leave partial artifacts or CSV rows.
+
+3.6 audio_record.py
+--------------------
+AudioRecorder defaults to 16000 samples/second, one channel, signed int16 PCM.
+_callback stores raw bytes in memory and records sounddevice status warnings.
+start rejects an already active stream, clears buffers/warnings, records a
+monotonic start timestamp just before stream.start(), and closes/reset state
+if startup fails. stop stops/closes an active stream. save requires stopped
+capture and at least one chunk, creates parent directories, writes a standard
+WAV with two bytes/sample, and returns its Path. discard stops and clears chunks.
+warnings exposes an immutable tuple; started_ns exposes the captured start time.
+
+The webcam collector uses this as the audio source for recognition and MP4 muxing;
+it does not print its warning tuple. No audio trimming, phoneme analysis, or
+landmark processing occurs here. Memory usage grows with recording length.
+Standalone main prompts, captures three seconds, and saves to the hardcoded
+Windows-style C:\NabuData\audio_tests\microphone_test.wav path. That path needs
+porting for a normal macOS/Linux output location.
+
+3.7 video_record.py
+--------------------
+VideoRecorder buffers JPEG-compressed BGR frames (default quality 90) and
+wall-clock time.time() timestamps in memory. start resets both lists; add encodes
+one frame and retains only successful encodings. fps returns 30.0 for fewer than
+two retained frames, otherwise (count-1)/(last_time-first_time).
+
+save requires frames, creates the parent folder, decodes the first JPEG for
+image dimensions, opens an mp4v VideoWriter at that single estimated FPS,
+checks it opened, decodes/writes all JPEGs, and releases the writer. It does
+not store per-frame timestamps in the MP4, interpolate gaps, or record sound.
+discard clears the in-memory lists. Unlike AudioRecorder there is no active
+recording state guard. The caller decides when add/start/save are appropriate.
+
+add_audio requires ffmpeg on PATH. It writes <video_stem>_av.mp4 using video
+stream copy, AAC audio encoding, explicit video/audio mapping, and -shortest,
+then os.replace replaces the silent original MP4. -shortest can cut the longer
+stream. It does not align streams using microphone/camera offsets. A failed
+conversion raises and may leave a temporary file; it does not undo prior CSV
+or WAV writes. This is used by live capture; uploaded videos already arrive as
+files and the API does not call this recorder.
+
+3.8 recorder.py
+----------------
+save_recording(label, frames, timestamps_ms, skipped, path=DATASET_PATH) is the
+live CSV writer. _header constructs the 124-column schema. If the existing
+nonempty file's header differs, saving raises before appending. _next_recording_id
+scans all numeric final columns, ignores blank/non-numeric rows, and returns
+max+1; a new dataset starts at 1. It does not count rows to choose the ID.
+
+It appends one blank separator before subsequent recordings, enumerates the
+zipped frames/timestamps, flattens XYZ, writes six-decimal strings, and returns
+(path, recording_id). skipped and imported re are unused. It has no NPZ writing,
+thread/process lock, shape validation, finite-value validation, or frame/time
+length equality check. zip silently stops at the shorter sequence. Current
+webcam callers are expected to supply matched arrays. Do not use simultaneous
+writers against the same dataset or assume an ID reservation transaction.
+
+3.9 trim.py
+------------
+activity(frames) builds float32 points, takes XY, centers each frame on corner
+midpoint, scales by one clip-wide median XY corner distance plus epsilon,
+computes average absolute coordinate differences between neighboring frames,
+and smooths the motion using a three-step uniform convolution in 'same' mode.
+No aspect correction, rotation correction, timestamp weighting, audio silence
+detection, word recognition, or phoneme boundaries are involved.
+
+active_range(frames, pad=3, min_keep=8, fraction=0.25) returns start/end indices
+with an EXCLUSIVE end. Fewer than four input frames are retained unchanged.
+Threshold = 0.25 * 90th percentile of smoothed motion. It selects motion strictly
+above threshold, keeps the span from first to last active transition, pads three
+frames on each side, and includes both frames of the last transition via +2.
+If no activity or fewer than eight frames would remain, it keeps the original.
+It trims edges only, never removes an internal pause. Head rotation, tracking
+jitter, or motion across a detection gap can look like speech movement.
+trim_idle slices frames and timestamps with those same indices and preserves
+absolute elapsed values. Used in live saving and compare; preprocessing NPZ
+files does not call it. An eight-frame minimum is not a 30-frame guarantee.
+
+3.10 transcribe.py
+-------------------
+_get_model lazily loads and caches faster_whisper.WhisperModel('small.en',
+device='cpu', compute_type='int8'). First inference may require downloading model
+weights; these are separate from the two MediaPipe assets in models/.
+_load_wav requires one channel, two-byte samples, and 16000 Hz, reads all PCM,
+and converts int16 to float32 divided by 32768.0. It does not accept MP4 directly.
+
+transcribe requests English, word timestamps, vad_filter=True, and
+condition_on_previous_text=False. It flattens segment words into dictionaries:
+  word: stripped, lowercase, then leading/trailing characters from .,!?
+        stripped; other punctuation is not generally normalized
+  start_ms/end_ms: model seconds multiplied by 1000 and truncated to integers
+  prob: word probability rounded to two decimals
+check joins those normalized words with single spaces and compares exact text
+to label.strip().lower(). Label punctuation and repeated internal spaces are
+not normalized the same way. A mismatch can arise from formatting or recognition
+error. No probability threshold is used by check. Word confidence is recognition
+confidence, not an articulation grade. Recognition times do not trim the visual
+sequence or provide training word boundaries anywhere in the current pipeline.
+
+Called after live saves, by check_confidence, by optional CLI comparison audio,
+and by the transcription API. No custom Whisper training occurs.
+
+3.11 check_confidence.py
+-------------------------
+Command-line inspection utility; its loop executes at import time because it
+has no main guard. typed_label(rid) scans dataset.csv and returns the first label
+whose final column matches the requested ID string, or None. For each argv ID,
+it transcribes test_data/audio/recording_<id>.wav, prints the typed label, and
+prints each recognized word's probability/start/end milliseconds. It does not
+apply a confidence threshold, edit labels, delete data, save a report, or train.
+Missing files/errors propagate. Use it to manually audit live collected audio.
+
+3.12 view_trim.py
+------------------
+Another argv-driven inspection utility with import-time execution. load(rid)
+reads matching CSV rows, takes row[3:-1], and reshapes 120 floats into (40,3).
+It prints not-found for missing IDs; otherwise calls activity and active_range,
+prints kept index bounds and ASCII motion bars per frame. Activity describes
+transitions, so the final frame reuses the last activity value for display.
+It does not rewrite the CSV or modify media. Since the webcam already trims
+before saving, this previews trimming on the SAVED sequence, not necessarily
+the original untrimmed capture. Extremely short manual inputs can expose edge
+cases in activity/display; the helper is not a general validated dataset loader.
+
+3.13 video_input.py
+--------------------
+landmarks_from_video(video_path, tracker=None) is the reusable MP4/video-to-array
+adapter. Requires an existing path, creates a tracker only if none was supplied,
+opens OpenCV capture, reads FPS with 'or 30.0' fallback, and reads sequentially.
+For each decoded frame it records aspect=height/width; valid mouth detections
+append metrics['landmarks'] and int(original_frame_index/FPS*1000). Frame index
+advances even when detection fails. It returns:
+  stacked float32 points (N,40,3), int64 timestamps (N,), image aspect H/W.
+It prints detected/source counts and nominal FPS. No detected frames raises
+ValueError. It releases capture and closes an owned tracker on normal completion;
+a supplied tracker stays the caller's responsibility. Cleanup is not universally
+protected against exceptions. Unlike HF preprocessing, FPS is not explicitly
+validated as finite and positive; the fallback only handles falsy values.
+It estimates timestamps from nominal FPS, not frame presentation timestamps.
+
+prepare_wav(source,out_path) requires ffmpeg, creates the output parent, and
+runs ffmpeg with overwrite, no video, mono, 16 kHz, signed-16 samples. Returns
+the output path; failures raise. A bare output filename with an empty dirname
+is problematic because makedirs is called on that dirname; current callers
+supply directory components. Used for MP4 audio extraction or WAV conversion.
+It does not silently synthesize audio for a video-only input.
+
+3.14 compare.py
+----------------
+Core visual comparison plus CLI/PNG feedback. Inputs are two tuples from
+landmarks_from_video, interpreted as user and reference of the SAME utterance.
+The reference is assumed appropriate by the caller; there is no automatic word
+matching or correctness verification.
+
+compare first independently applies active_range to each raw sequence and
+computes user_ms/ref_ms as last retained timestamp minus first retained timestamp.
+This is detected-motion span, not the whole container/audio duration; the final
+frame interval is not added. It then applies the 2D aspect/center/rotation/scale
+normalization described earlier.
+
+dtw_path flattens each 40x2 frame into 80 features. Pairwise cost is Euclidean
+distance across ALL coordinates, not just aperture and width. A cumulative
+(n+1)x(m+1) matrix allows diagonal, vertical, or horizontal steps. Backtracking
+prefers the first minimum in [diagonal, vertical, horizontal] ties. The returned
+path can repeat user or reference frame indices to align different speech rates.
+Runtime and matrices grow with n*m; no alignment window or long-video limit is
+implemented. This aligns geometry without phoneme or audio timing information.
+
+features returns [lower-inner-y - upper-inner-y, right-corner-x - left-corner-x]
+in normalized coordinates. compare returns:
+  fu,fr: (L,2) feature curves indexed along the DTW path
+  shape_err: (L,) mean of 40 pointwise 2D Euclidean distances per aligned pair
+  u_pts,r_pts: normalized trimmed sequences before DTW duplication
+  ui,ri: (L,) aligned indices into those sequences
+  user_ms,ref_ms: original timestamp spans of the retained clips
+
+report splits the DTW path into three index-based sections (start/middle/end),
+prints each mean shape error and differences in the two features. THRESHOLD=0.08
+applies to mean signed FEATURE differences, not to total shape error or a trained
+accuracy cutoff. Wider/narrower language is a geometric heuristic; lip width
+alone does not establish tongue position, airflow, sound identity, or 3D rounding.
+
+plot creates a 2x2 PNG: opening curves, width curves, overall shape difference,
+and inner/outer outlines at the maximum-error aligned pair. Green is reference,
+red is user. A vertical marker identifies that pair. The x-axis says '% of word'
+but is really evenly spaced progression along the DTW path, not physical time
+or recognized word/phoneme position. plot closes its figure; PNG size is 1320x960
+with the current 11x8-inch figure and 120 DPI. It does not export numerical data.
+
+CLI options: --user and --example required; --word names a default plot;
+--out overrides path; --user-wav plus --word enables optional transcription.
+Without --out, --word is required and sanitized to a 1-100-character filename.
+ACTUAL default is test_data/plots/<sanitized_word>.png, under pronounciation.
+The --out help string mentions api/plots but the code writes ordinary plots/.
+When --out is supplied, --word is optional for a visual-only run. No automatic
+reference transcription occurs. Optional audio is converted to the shared
+ test_data/audio/_prepared_user.wav (overwritten), then check is printed.
+
+CLI extraction creates and closes one shared tracker, but has no try/finally
+around extraction and no explicit four-frame minimum. API adds both of those
+protections. compare itself does not comprehensively validate arbitrary tuples.
+Matplotlib requests Agg after importing pyplot here; API requests Agg before
+importing compare. Treat this as file-output plotting, not an interactive GUI.
+
+3.15 api.py
+------------
+FastAPI app titled 'Nabu Pronunciation'. At import it selects Agg, creates
+pronounciation/test_data/api/plots, mounts the entire api data directory at
+/media, and creates a process-local threading.Lock called processing.
+Routes are synchronous. There is no implemented authentication, database,
+training endpoint, live camera stream, cleanup scheduler, or label registry.
+Do not assume UUID upload IDs correspond to integer CSV recording IDs.
+
+video_path(recording_id: UUID) resolves DATA/<uuid>.mp4 and raises HTTP 404 if
+missing. UUID type validation is handled by FastAPI.
+
+POST /recordings (201): multipart file field 'video'. Checks ONLY a case-insensitive
+.mp4 filename suffix (415 otherwise), generates a UUID, copies bytes to its MP4,
+closes the upload in finally, and removes a partial output if copying fails.
+Returns {id, video_url}. It does not inspect codecs, transcribe, extract landmarks,
+store a label, impose a size limit, or append dataset.csv. A successful upload
+alone does not prove the content can be decoded.
+
+POST /recordings/{recording_id}/transcription: label is a query parameter.
+Validates video existence, holds processing lock, converts embedded audio to
+same-UUID WAV beside the MP4, calls check, returns heard/expected/match.
+ffmpeg CalledProcessError is mapped to HTTP 422. Missing ffmpeg, model failures,
+and other exceptions do not all get that mapping. A video-only MP4 cannot pass
+audio extraction. WAV output is retained, not deleted after recognition.
+
+POST /comparisons: user_id, example_id (UUIDs) and label are query parameters,
+not a JSON body in this signature. Sanitizes label to a 1-100-character basename,
+validates both videos, and under processing lock creates a tracker, extracts
+each sequence, requires at least FOUR detected frames in each, and compares.
+ValueError becomes 422 and tracker.close runs in finally. Other failures may
+propagate. Writes api/plots/<sanitized_label>.png and returns:
+  user_ms, example_ms (internal ref_ms), shape_error (list), user_features (list),
+  example_features (list), png_url.
+No terminal report() is called, no transcription is required, and no saved CSV
+or processed NPZ is read. label only names the plot; it does not prove content.
+Repeated/sanitization-colliding labels overwrite the same PNG. Upload is outside
+the processing lock; the lock serializes comparison/transcription in ONE server
+process, not across multiple worker processes. /media exposes retained upload,
+WAV, and plot files by path; it is not a private per-user media store.
+
+3.16 preprocess_recordings.py
+------------------------------
+Training preparation for RAW NPZ inputs. RECORDINGS_DIR is anchored to this
+source file's directory/test_data/recordings (unlike many working-directory paths).
+Default output is the Windows-style C:\NabuData\processed_webcam path.
+
+Expected NPZ keys: landmarks (N,40,3), timestamps_ms (N,), label, skipped.
+No current live function in this folder writes this raw NPZ schema.
+normalize_landmarks validates dimensions and finite coordinates, centers XYZ
+per frame and divides by median XY corner distance; zero/tiny width raises.
+resample_sequence validates matching count and finite strictly increasing times,
+then np.interp independently interpolates flattened coordinates at target times.
+
+preprocess_file loads keys with allow_pickle=False, requires >=30 raw frames,
+normalizes, converts timestamps to int64, verifies shape and increasing order,
+and saves compressed <source.stem>_processed.npz containing:
+  landmarks_normalized, timestamps_ms, label, skipped, original_frame_count
+  landmarks_29 additionally if label is nonempty and split() has one token.
+A token need not be a linguistically valid word: punctuation/nonsense can qualify.
+Sentence sequences keep variable length; no sentence word segmentation exists.
+Original times remain at original sequence length; no separate 29-time array is
+saved. The exporter regenerates those times. Raw landmarks are NOT copied into
+this processed webcam NPZ. No trim_idle, audio loading, or transcript validation.
+
+CLI --input selects NPZ; absent that it selects latest mtime in RECORDINGS_DIR,
+not the largest recording ID or newest CSV group. --output-dir overrides the
+output. The CLI processes one file, not the whole raw directory. Missing raw
+recordings produce an argparse error. A post-trim live recording below 30 frames
+would not pass this preprocessor if converted without changing its policy.
+
+3.17 export_csv.py
+--------------------
+Raw NPZ exporter. Scans working-directory-relative test_data/recordings/*.npz,
+sorts paths, and REWRITES C:\NabuData\csv\mouth_recordings.csv on every execution.
+There is NO main guard: importing this module can create directories and rewrite
+that CSV. With zero inputs it still writes a header and prints zero exported.
+It expects landmarks/timestamps_ms/label, checks (N,40,3) and equal lengths,
+and emits the same 124 column names as recorder. However recording_id is the
+NPZ filename stem, not an allocated integer. Coordinates use NumPy values as
+CSV fields rather than six-decimal formatting. It does not normalize, trim,
+resample, check finite values, validate timestamps, or inspect audio. It is not
+the current live CSV writer and does not read dataset.csv.
+
+3.18 export_normalized_csv.py
+------------------------------
+Exporter for *_processed.npz in C:\NabuData\processed_webcam. main refuses an
+empty glob, creates the output parent, and REWRITES
+C:\NabuData\csv\mouth_recordings_normalized.csv. Main guard prevents export
+on import. No CLI options; paths are constants.
+
+Skips files without landmarks_29 (normally sentences). Loads timestamps_ms and
+scalar label; requires landmarks shape (29,40,3), finite points, and source times
+of length >=2 with strictly positive differences. It does not explicitly test
+finite timestamps or prove their count matches landmarks_normalized. Regenerates
+29 evenly spaced times between first/last source timestamps, rounds them to
+integers, and writes 29 rows with 124 columns. recording_id is the processed
+filename stem with _processed removed. Original source duration is represented
+by those timestamp endpoints despite the fixed frame count. It does not save
+skipped/original-frame-count metadata or create training splits. Raw and normalized
+CSVs share column names but coordinates have different meanings; keep them
+separate. Repeated rounded timestamps are possible for very short time spans.
+
+3.19 huggingFaceTest.py
+------------------------
+hug() reads the remote merged_metadata.json using pandas and returns a DataFrame.
+main prints count, columns, first five rows, and per-column missing values.
+It is metadata discovery only: no video decoding, landmarks, downloads of all
+videos, local dataset rows, normalization, or training. Network access and the
+appropriate pandas Hugging Face filesystem support are required when called.
+
+3.20 test_hug_landmarks.py
+---------------------------
+Top-level diagnostic (NO main guard), with downloads/inference triggered by
+import. Uses C:\NabuData\models\face_landmarker.task; downloads the Google
+face_landmarker float16/1 task asset if that path is absent. Downloads
+001_June/video.mp4 from diddmstjr/confusable-100-lipreading, opens the original
+video, enumerates all positions using CAP_PROP_FRAME_COUNT, seeks to each frame,
+and runs one-face IMAGE-mode FaceLandmarker directly on full video RGB pixels.
+Read failures and no-face frames print messages and continue. Successful frames
+select float32 (40,3) ordered lip points and print their shape. Finally releases
+video and prints successful detections versus requested positions.
+
+It does not use MouthTracker, BlazeFace's separate asset, normalization,
+resampling, transcription, or NPZ/CSV output. It tests whether landmark inference
+works on this dataset footage at all, including limited face context. It does
+not guarantee that process_hug's stricter all-frame requirement will pass.
+The model/download caches may be outside this repository.
+
+3.21 preprocess_hug_landmarks.py
+---------------------------------
+Batch Hugging Face preparation, direct landmarker route. Constants name the
+same dataset repository, Windows-style MODEL, and default
+C:\NabuData\processed_hf_landmarks output directory. Imports the shared 30-frame
+minimum, 29-frame target, normalize_landmarks, and resample_sequence.
+
+main accepts --limit (default 1; 0 means all; negative rejected), --output-dir,
+and --preview. Requires MODEL already exists; unlike test_hug it DOES NOT
+download the model. Reads remote metadata, sorts by index, applies limit, creates
+one IMAGE-mode FaceLandmarker, and processes rows. It catches ValueError, OSError,
+and RuntimeError per row, prints failures, continues, and prints totals. Other
+exception types can still abort a run; there is no saved failure manifest.
+
+process_video uses text as stripped label and source_folder as folder identifier,
+downloads folder/video.mp4, opens it, and rejects nonpositive/nonfinite FPS.
+Sequentially decodes frames, infers direct full-image landmarks, and selects the
+40 points. Unlike local video_input, ONE missing-face frame rejects the whole
+clip; skipped is therefore saved as 0 for accepted clips. Nominal timestamps
+are round(frame_number*1000/fps), not original presentation timestamps. Requires
+>=30 detected frames, then applies shared normalization and, for one-token labels,
+29-frame interpolation. Strict timestamp validation is performed by the resampler
+for single words; multiword records do not go through that function.
+
+Output <folder>_processed.npz includes landmarks_normalized, landmarks_raw,
+timestamps_ms, label, skipped, original_frame_count, fps (float32), source_folder,
+and optional landmarks_29. --preview marks lip points on the middle original
+frame and saves <folder>_preview.png separately. The preview is visual quality
+inspection, not model supervision. Original videos go into the Hugging Face
+cache through the download library, not automatically into test_data/video.
+No audio extraction/check, idle trim, CSV append, training split, or model fit.
+
+3.22 test_dataset_video.py
+---------------------------
+Local prerecorded crop diagnostic. process_dataset_clip(video_path,
+output_dir='pronounciation/crops') checks path, creates output directory, opens
+MouthTracker and OpenCV video, uses nominal FPS or 30 fallback, and processes
+all source frames. For each nonempty crop it writes frame_<source_index:04d>.jpg
+and appends a metric entry: frame, timestamp_ms, aperture_px, stretch_px,
+aspect_ratio, landmarks. Here 'landmarks' is pts.tolist(): (40,2) integer
+FULL-IMAGE PIXELS, not metrics['landmarks'] normalized XYZ.
+
+It releases video/tracker on normal completion, prints frame counts and mean/max
+opening/ratio, and RETURNS the metric log in memory. It does not serialize that
+log or create training NPZs/CSV. Filenames retain original indices, so missed
+mouth frames leave filename gaps. Reusing the output folder can overwrite frames
+and leave old files beyond the new clip length. Main looks specifically for
+pronounciation/test_videos/sample_clip.mp4, which is absent in this snapshot;
+otherwise it prints a placement message. Use the function for arbitrary paths.
+
+4. MODEL, DATA, CACHE, AND DOCUMENTATION FILES
+============================================
+
+4.1 models/face_landmarker.task
+--------------------------------
+Local pretrained MediaPipe task bundle used by MouthTracker's FaceLandmarker.
+Required for face landmark inference in live capture, local video analysis,
+comparison, and API comparison. It is an input model asset, not output of this
+project's data preparation. Its internal architecture/version/landmark count
+was not reverse-engineered for this guide; the code only relies on the selected
+vertex IDs being available. HF scripts have their own MODEL path and do not
+automatically resolve this local copy.
+
+4.2 models/blaze_face_full_range.tflite
+---------------------------------------
+Local pretrained FaceDetector asset used to find the face BEFORE MouthTracker
+landmark estimation. Required by shared live/local video routes. It does not
+identify words or calculate mouth pronunciation grades. Direct HF scripts do
+not load this separate asset. Neither model should be confused with Whisper's
+separately cached small.en speech model.
+
+4.3 test_data/dataset.csv
+--------------------------
+Current live landmark store and source for view_trim/check_confidence label
+lookup. At review: 1,981 nonblank data rows, all with 124 fields, 31 recording
+IDs (1 through 31). Human-entered labels include test phrases and nonsense;
+existence of a row is not evidence that it is suitable training supervision.
+The CSV has no speaker IDs or split assignments. Recording 26 contains 27 rows,
+consistent with capture accepting >=30 BEFORE trimming (not proof of its exact
+historical run). No current preprocessing script reads this CSV for training.
+
+4.4 test_data/video/*.mp4
+-------------------------
+recording_28.mp4 through recording_31.mp4 are local integer-ID camera artifacts;
+all have 1280x720 video plus an audio stream in this snapshot. Their associated
+CSV labels are future, june, jbvdwljvbjvb, and kent respectively. They can be
+compared by re-extracting landmarks and their audio can be transcribed.
+Kent.mp4 and june.mp4 are local named potential reference videos, both 1920x1080
+and VIDEO-ONLY according to stream inspection. Their names suggest labels but
+there is no manifest proving source or correctness. Reference comparison needs
+visible geometry and does not require sound; transcription of these silent
+containers will fail. Kent.mp4 is case-sensitive on some filesystems.
+
+4.5 test_data/api/<UUID>.mp4
+-----------------------------------------------
+UUID-named MP4s are stored API recording artifacts under the current upload
+layout. The code retains no provenance or original filenames.
+Several video-only uploads and several audiovisual uploads have matching stream
+metadata; this does not establish which source file was uploaded or what was
+said. The catalog lists each UUID MP4 and stream/duration information.
+API comparison re-extracts points each time and does not persist landmark arrays.
+
+4.6 __pycache__/*.cpython-312.pyc and __init__.pyc
+------------------------------------------------
+Generated interpreter bytecode, not separate authored pipeline implementations.
+The cpython-312 names indicate Python 3.12 cache variants for matching sources.
+Python normally uses/rebuilds compatible caches; these are not model checkpoints,
+training inputs, or files to edit. The standalone __init__.pyc has a different
+magic header from those caches and is a legacy artifact; its exact interpreter
+version was not identified. Source __init__.py is the authoritative initializer.
+Every existing bytecode path is individually listed in the catalog.
+
+4.7 .DS_Store files
+--------------------
+macOS Finder folder-display metadata. Present at package root, test_data root,
+and test_data/video. No pipeline function reads them; they contain no intended
+speech features, model weights, or recording labels. Included in the catalog
+for completeness, not because they contribute to pronunciation processing.
+
+4.8 file and roles.txt (this file)
+-----------------------------------
+Human-readable architecture, contracts, inventory, run examples, and limitations.
+No Python module imports it. Its contribution is explaining how to inspect and
+connect the available components without mistaking preparation for model training.
+
+5. TIMING, TRAINING READINESS, AND COMMON CONFUSIONS
+===================================================
+
+Why do CSV timestamps differ from WAV/container duration?
+  CSV retains only detected and then motion-trimmed frames, preserving capture
+  offsets. WAV covers microphone capture; MP4 encodes buffered video at one mean
+  FPS and muxing uses -shortest. There is no offset calibration. Existing artifacts
+  may also have been produced by earlier versions. Never assume CSV row k equals
+  MP4 frame k or audio sample k*fixed_stride. Align deliberately using appropriate
+  metadata, and remember source frame numbers were not stored in live CSV.
+
+Does trimming remove silence from audio or find exact word boundaries?
+  No. It estimates edge activity from visual coordinate changes. Whisper VAD is
+  separate and word timestamps are only returned/printed, not used to trim data.
+
+Can live dataset.csv go straight into preprocess_recordings?
+  No. That function uses np.load on NPZ keys. A deliberate adapter would need to
+  group nonblank CSV rows by ID, reconstruct ordered float32 (N,40,3) points and
+  timestamps, preserve labels, validate counts/timing, and define what to do with
+  skipped metadata (not recoverable from this CSV alone). No such adapter was
+  added as part of this documentation task. Original frame dimensions also cannot
+  be recovered from this CSV alone for aspect-correct comparison normalization.
+
+Can the two normalized representations be mixed?
+  No automatic guarantee. XYZ preparation has different dimension, aspect and
+  rotation handling from the 2D comparison representation. HF and webcam also use
+  different detector context and may have different camera framing. A downstream
+  trainer must choose one contract and apply it consistently to inference.
+
+What is still needed for actual training?
+  A consumer that reads sequences/labels, consistent preprocessing and inference
+  contracts, quality-reviewed labels, a vocabulary/target definition, explicit
+  speaker/session metadata where needed, separate training/validation/test groups,
+  a model/loss/optimization loop, and evaluation. Split whole recordings (and
+  speakers/sessions as appropriate) before creating related samples; splitting
+  rows of the same recording would leak near-identical frames. This is a statement
+  of missing functionality, not functionality already present in these files.
+
+Do b/p/m or other similar-looking sounds get distinguished automatically?
+  No custom audiovisual distinction is implemented. Whisper may recognize words
+  using audio, but its text check is independent from geometric comparison.
+  Lip motion alone can be ambiguous and does not measure tongue/airflow/voicing.
+  Neither report's thresholds nor probability rounding is a learned phoneme grade.
+
+Why do training scripts find no files, or create strange Windows-named paths?
+  Most training-preparation defaults are hardcoded C:\NabuData\... strings.
+  On POSIX those backslashes/drive notation do not form a Windows absolute path;
+  pathlib may treat the whole string as a relative name. Override supported output
+  arguments and change path constants where no CLI option exists. HF MODEL is a
+  constant, not a --model argument. The local models/ copy is not its default.
+
+Why do some scripts start working immediately when imported?
+  export_csv, test_hug_landmarks, check_confidence, and view_trim have top-level
+  work without main guards. In particular export_csv can overwrite its output
+  and test_hug can download/run inference. Avoid importing them just to inspect
+  names. Files prefixed test_ here are interactive/diagnostic scripts, not a
+  comprehensive automated test suite.
+
+Are all local models/media included when someone clones the repository?
+  No guarantee. Current .gitignore excludes __pycache__, *.pyc, .DS_Store,
+  pronounciation/models/*.task and *.tflite, pronounciation/test_data/, crops,
+  and video extensions. It also contains '*.task *.tflite' as a single pattern;
+  explicit per-directory model patterns are the relevant ones for these assets.
+  Ignoring a path does not untrack an already tracked file. Check Git tracking
+  rather than assuming local artifact presence means it is committed.
+
+Do old run notes take precedence over this guide's commands?
+  No. notes.txt includes historical examples referring to example.mp4 (absent),
+  compare_result.png (not current default), and comparison without --word/--out
+  (now rejected). The actual compare code writes test_data/plots/<word>.png;
+  its help text itself mentions a different api/plots default. Follow the code
+  behavior documented here. The root Docker Compose uses an idle Alpine starter,
+  not a configured pronunciation server or training environment.
+
+6. RUN EXAMPLES AND REQUIRED ENVIRONMENT
+=========================================
+Run from nabu repository root in a Python environment with the dependencies
+actually imported: numpy, OpenCV (cv2), mediapipe, sounddevice, faster-whisper,
+matplotlib, pandas, huggingface_hub, appropriate hf:// filesystem support, plus
+FastAPI/uvicorn/python-multipart for API work. requirements.txt lists project
+packages, but a successful full environment installation was not verified here.
+FFmpeg is a separate executable on PATH; Python subprocess does not install it.
+Local camera/microphone permissions and GUI support are needed for live scripts.
+Remote metadata/video/model fetches need network access and available caches.
+
+Live collection:
+  python -m pronounciation.test_webcam
+
+Standalone microphone diagnostic (edit its output path on macOS/Linux first):
+  python -m pronounciation.audio_record
+
+Review saved labels/audio and retained motion:
+  python -m pronounciation.check_confidence 28 29 31
+  python -m pronounciation.view_trim 28 29 31
+
+Compare local files (typed label is not a verified audio annotation):
+  python -m pronounciation.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/june.mp4 --word june
+  Expected plot path: pronounciation/test_data/plots/june.png
+
+Also check USER audio from its WAV; no reference audio is required:
+  python -m pronounciation.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/june.mp4 --user-wav pronounciation/test_data/audio/recording_29.wav --word june --out pronounciation/test_data/plots/june_audio.png
+
+Geometric self-comparison diagnostic (expected very small error for deterministic
+matching detections; this documentation did not execute inference):
+  python -m pronounciation.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/recording_29.mp4 --out pronounciation/test_data/plots/self_check.png
+
+Run API and use its generated interactive schema:
+  python -m uvicorn pronounciation.api:app
+  Open http://127.0.0.1:8000/docs
+  Upload each MP4 with POST /recordings, then use the returned UUIDs for comparison.
+  Supply scalar label/IDs as query parameters as shown by the generated docs.
+
+Inspect arbitrary local video from Python:
+  from pronounciation.test_dataset_video import process_dataset_clip
+  log = process_dataset_clip('path/to/clip.mp4', 'pronounciation/crops/my_clip')
+  This returns a log; saving the log to disk is the caller's responsibility.
+
+NPZ preparation (placeholder input must already exist with the stated keys):
+  python -m pronounciation.preprocess_recordings --input path/to/raw_recording.npz --output-dir pronounciation/test_data/processed_webcam
+  To export that directory, set export_normalized_csv.PROCESSED_DIR and OUTPUT_FILE
+  appropriately in code before running its module. Current defaults do not follow
+  this override automatically. To export raw NPZs use export_csv with its own
+  input/output constants; it overwrites output even when no inputs are found.
+
+Hugging Face metadata and direct-landmark preparation:
+  python -m pronounciation.huggingFaceTest
+  python -m pronounciation.test_hug_landmarks
+  python -m pronounciation.preprocess_hug_landmarks --limit 1 --preview --output-dir pronounciation/test_data/processed_hf_landmarks
+  Correct the hardcoded MODEL paths before using these on this machine. --limit 0
+  attempts all metadata rows and may download/process substantial data.
+
+7. COMPLETE LOCAL ARTIFACT CATALOG
+==================================
+The inventory below lists local files beneath pronounciation at documentation
+time, excluding WAV and PNG artifacts. Labels are quoted CSV text, not verified
+spoken words.
+Durations are media/header measurements, not model-detected speech spans.
+
+.DS_Store
+  macOS Finder metadata; unused by all processing routes.
+
+__init__.py
+  Authored source; detailed role in section 3 under this filename.
+
+__init__.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/__init__.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/api.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/audio_record.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/check_confidence.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/compare.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/config.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/detector.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/metrics.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/recorder.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/test_webcam.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/transcribe.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/trim.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/video_input.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/video_record.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+__pycache__/view_trim.cpython-312.pyc
+  Generated bytecode corresponding by basename to Python source; no independent training role. See section 4.6.
+
+api.py
+  Authored source; detailed role in section 3 under this filename.
+
+audio_record.py
+  Authored source; detailed role in section 3 under this filename.
+
+check_confidence.py
+  Authored source; detailed role in section 3 under this filename.
+
+compare.py
+  Authored source; detailed role in section 3 under this filename.
+
+config.py
+  Authored source; detailed role in section 3 under this filename.
+
+detector.py
+  Authored source; detailed role in section 3 under this filename.
+
+export_csv.py
+  Authored source; detailed role in section 3 under this filename.
+
+export_normalized_csv.py
+  Authored source; detailed role in section 3 under this filename.
+
+file and roles.txt
+  This explanatory document; not consumed by pipeline code.
+
+huggingFaceTest.py
+  Authored source; detailed role in section 3 under this filename.
+
+metrics.py
+  Authored source; detailed role in section 3 under this filename.
+
+models/blaze_face_full_range.tflite
+  Pretrained inference asset; detailed role in section 4.1 or 4.2.
+
+models/face_landmarker.task
+  Pretrained inference asset; detailed role in section 4.1 or 4.2.
+
+preprocess_hug_landmarks.py
+  Authored source; detailed role in section 3 under this filename.
+
+preprocess_recordings.py
+  Authored source; detailed role in section 3 under this filename.
+
+recorder.py
+  Authored source; detailed role in section 3 under this filename.
+
+test_data/.DS_Store
+  macOS Finder metadata; unused by all processing routes.
+
+test_data/api/00bbe5b7-27b3-4b84-8d23-9ae55046a55c.mp4
+  Video: 1920x1080; nominal rate 1521/50 frames/second; container duration 2.235 seconds; no audio stream.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/1811950f-4e66-4879-b329-414b0354e16f.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/1b1b4ada-c243-4d8b-9caf-fa1616e38b4c.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/49711176-9a70-4ef0-b01e-70ae7aec4d1c.mp4
+  Video: 1920x1080; nominal rate 1521/50 frames/second; container duration 2.235 seconds; no audio stream.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/62ba235d-07a2-4430-9746-fbea37bec473.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/7fe6d191-3481-4d67-b1b0-33e29db6267f.mp4
+  Video: 1920x1080; nominal rate 1521/50 frames/second; container duration 2.235 seconds; no audio stream.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/bb42ae49-a0f3-4e65-8944-81a0d600fbeb.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/bcf55eac-0877-4c91-a15b-418101b67635.mp4
+  Video: 1920x1080; nominal rate 1521/50 frames/second; container duration 2.235 seconds; no audio stream.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/c5ccf028-d91f-42ae-b866-7bf556c50405.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/d6b81fec-0add-42f8-b1d0-6fcbcfd58401.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/ed8d37c6-3bfb-4162-83d1-b39c7024812a.mp4
+  Video: 1920x1080; nominal rate 1521/50 frames/second; container duration 2.235 seconds; no audio stream.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/api/f1c617dc-5c02-434f-b675-0c6131fab2fa.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  UUID recording artifact used by API video lookup/comparison; no persisted verified label or provenance.
+
+test_data/dataset.csv
+  Live labeled landmark table; 124 columns, 1981 data rows, 31 IDs at review. See sections 2.4 and 4.3.
+
+test_data/video/.DS_Store
+  macOS Finder metadata; unused by all processing routes.
+
+test_data/video/Kent.mp4
+  Video: 1920x1080; nominal rate 3798/125 frames/second; container duration 2.501 seconds; no audio stream.
+  Named potential reference/input video; exact spoken content/source not verified.
+
+test_data/video/june.mp4
+  Video: 1920x1080; nominal rate 1521/50 frames/second; container duration 2.235 seconds; no audio stream.
+  Named potential reference/input video; exact spoken content/source not verified.
+
+test_data/video/recording_28.mp4
+  Video: 1280x720; nominal rate 1879/125 frames/second; container duration 2.085 seconds; includes audio.
+  Integer-ID capture artifact; CSV ID 28, typed label 'future'. Re-extract landmarks for comparison.
+
+test_data/video/recording_29.mp4
+  Video: 1280x720; nominal rate 14681/1000 frames/second; container duration 2.070 seconds; includes audio.
+  Integer-ID capture artifact; CSV ID 29, typed label 'june'. Re-extract landmarks for comparison.
+
+test_data/video/recording_30.mp4
+  Video: 1280x720; nominal rate 7521/500 frames/second; container duration 2.697 seconds; includes audio.
+  Integer-ID capture artifact; CSV ID 30, typed label 'jbvdwljvbjvb'. Re-extract landmarks for comparison.
+
+test_data/video/recording_31.mp4
+  Video: 1280x720; nominal rate 13427/1000 frames/second; container duration 2.401 seconds; includes audio.
+  Integer-ID capture artifact; CSV ID 31, typed label 'kent'. Re-extract landmarks for comparison.
+
+test_dataset_video.py
+  Authored source; detailed role in section 3 under this filename.
+
+test_hug_landmarks.py
+  Authored source; detailed role in section 3 under this filename.
+
+test_webcam.py
+  Authored source; detailed role in section 3 under this filename.
+
+transcribe.py
+  Authored source; detailed role in section 3 under this filename.
+
+trim.py
+  Authored source; detailed role in section 3 under this filename.
+
+video_input.py
+  Authored source; detailed role in section 3 under this filename.
+
+video_record.py
+  Authored source; detailed role in section 3 under this filename.
+
+view_trim.py
+  Authored source; detailed role in section 3 under this filename.
+
+END OF GUIDE
