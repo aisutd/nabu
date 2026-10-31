@@ -13,7 +13,7 @@ import errorfinder
 #On startup, give the stop signals back to uvicorn so it can shut down normally.
 #On shutdown (open requests are done by then), exit immediately and skip the cleanup. Nothing here needs saving on exit
 @asynccontextmanager
-async def lifespan(app):
+async def lifespan(fastapp):
     ocrfuncs.restoreSignalHandlers()
     yield
     os._exit(0)
@@ -27,7 +27,7 @@ app.mount("/tester", StaticFiles(directory=Path(__file__).parent / "frontend", h
 #Endpoints are plain def (not async def) on purpose: OCR and errorfinder are CPU heavy, and FastAPI runs plain def
 #endpoints in a thread pool, so one slow request doesn't block every other request on the event loop
 
-#OCRfunds
+#OCRfuncs
 #takes files (and an optional language, default english) as input and returns whatever the ocrfuncs functions return
 @app.post("/ocr/text")
 def ocr_text(file: UploadFile = File(...), lang: str = Form('en')):
@@ -51,4 +51,5 @@ def ocr_errorfinder(file: UploadFile = File(...), expected: str = Form(...)):
     error = errorfinder.findError(file.file, expected) #hand paddleocr the pixels (same for the rest of the endpoints)
     culledError = errorfinder.cullErrorFromThreshold(error, threshold=errorfinder.generateThreshold(error[1]))
     combinedError = errorfinder.combineAndTransform(culledError)
-    return errorfinder.cullPointsFromLeaderboard(combinedError, 5)
+    points, sizes = errorfinder.cullPointsFromLeaderboard(combinedError, 5)
+    return points, sizes, error[2]
