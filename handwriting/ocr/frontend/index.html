@@ -77,6 +77,24 @@
   </p>
 </fieldset>
 
+<style>
+  #errorComparison { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  #errorComparison figure { margin: 0; }
+  #errorComparison canvas { max-width: min(300px, 100%); height: auto; border: 1px solid #000; }
+  #errorExplanation { margin: 12px 0; }
+</style>
+<div id="errorComparison">
+  <figure>
+    <figcaption>Handwriting</figcaption>
+    <canvas id="myCanvas" width="300" height="300"></canvas>
+  </figure>
+  <figure>
+    <figcaption>Expected character</figcaption>
+    <canvas id="expectedCanvas" width="300" height="300"></canvas>
+  </figure>
+</div>
+<script type="text/javascript" src="./canvas.js"></script>
+
 <!-- Box 2: OCR endpoints. data-ep is a custom attribute holding each button's endpoint path; the script reads it to
      know where to send the request -->
 <fieldset>
@@ -179,7 +197,16 @@ async function call(path, fields = {}, sendFile = true) {
     status.textContent = `${res.status} · ${(performance.now() - t0).toFixed(0)} ms`;
     status.className = res.ok ? "ok" : "err";
     //Pretty print JSON responses; anything else (e.g. "Internal Server Error") is shown as plain text
-    try { pre.textContent = JSON.stringify(JSON.parse(text), null, 1); } catch { pre.textContent = text; }
+    try {
+      const responseData = JSON.parse(text);
+      pre.textContent = JSON.stringify(responseData, null, 1);
+      if (path === "/ocr/errorfinder/findError") {
+        const errorDataEvent = new CustomEvent("findErrorDataReceived", {
+          detail: { responseData, expected: fields.expected },
+        });
+        window.dispatchEvent(errorDataEvent);
+      }
+    } catch { pre.textContent = text; }
   } catch (err) {
     //The request never got a response (e.g. the server isn't running)
     status.textContent = err.message;
