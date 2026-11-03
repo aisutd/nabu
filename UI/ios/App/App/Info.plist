@@ -66,5 +66,15 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+
+	<key>NSCameraUsageDescription</key>
+	<string>Nabu uses your camera to record pronunciation practice.</string>
+
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Nabu uses your microphone to record your speech.</string><key>NSCameraUsageDescription</key>
+	<string>Nabu uses your camera to record pronunciation practice.</string>
+
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Nabu uses your microphone to record your speech.</string>
 </dict>
 </plist>
