@@ -22,6 +22,11 @@ Next:
   into zxahamza20 and integrate the model with the existing pipeline.
 - Modularize the pronunciation code into subfolders after the integration;
   update imports, model paths, and run commands together.
+- light mode/dark mode
+- fix the android emulator not working
+- actually implement the figma/layout/reqs the mentors have for the Frontend
+  - including color, sub components etc
+
 
 ==================================================================================================================================================
                                                                         2. File struct
