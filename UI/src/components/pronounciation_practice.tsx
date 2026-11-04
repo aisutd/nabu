@@ -30,7 +30,7 @@ function VideoPreview({ file }: { file: File | null }) {
 
   if (!file) return null
 
-  return <video ref={videoRef} controls playsInline />
+  return <video className="mt-4 block max-h-80 w-full rounded-lg bg-[#111]" ref={videoRef} controls playsInline />
 }
 
 export default function PronunciationPractice() {
@@ -111,16 +111,17 @@ export default function PronunciationPractice() {
   }
 
   return (
-    <main className="practice">
-      <h1>Pronunciation practice</h1>
-      <p>
+    <main className="mx-auto max-w-[1050px] px-5 pt-[max(24px,env(safe-area-inset-top))] pb-[max(32px,env(safe-area-inset-bottom))]">
+      <h1 className="mb-3 text-[2em] leading-normal font-bold">Pronunciation practice</h1>
+      <p className="my-4">
         Compare your mouth movement with an example saying the same word.
       </p>
 
-      <fieldset disabled={busy}>
-        <label>
+      <fieldset className="my-6 min-w-0 border-0 p-0" disabled={busy}>
+        <label className="mb-4 grid gap-2">
           Word or phrase
           <input
+            className="w-full rounded-lg border border-[#cbd2df] p-2.5"
             value={word}
             placeholder="For example: hello"
             onChange={(event) => {
@@ -130,12 +131,13 @@ export default function PronunciationPractice() {
           />
         </label>
 
-        <div className="video-grid">
-          <section className="card">
-            <h2>Example</h2>
-            <label>
+        <div className="my-6 grid grid-cols-1 gap-5 min-[651px]:grid-cols-2">
+          <section className="mb-5 rounded-xl border border-[#dce1eb] bg-white p-5">
+            <h2 className="mb-[0.83em] text-[1.5em] leading-normal font-bold">Example</h2>
+            <label className="mb-4 grid gap-2">
               Upload a reference video
               <input
+                className="w-full rounded-lg border border-[#cbd2df] p-2.5"
                 type="file"
                 accept="video/mp4,video/quicktime,video/webm,.m4v"
                 onChange={(event) => {
@@ -148,8 +150,8 @@ export default function PronunciationPractice() {
             <VideoPreview file={example} />
           </section>
 
-          <section className="card">
-            <h2>Your recording</h2>
+          <section className="mb-5 rounded-xl border border-[#dce1eb] bg-white p-5">
+            <h2 className="mb-[0.83em] text-[1.5em] leading-normal font-bold">Your recording</h2>
             <VideoRecorder
               disabled={busy}
               onRecordingChange={setCapturing}
@@ -159,9 +161,10 @@ export default function PronunciationPractice() {
                 clearResults()
               }}
             />
-            <label>
+            <label className="mb-4 grid gap-2">
               Or select a video
               <input
+                className="w-full rounded-lg border border-[#cbd2df] p-2.5"
                 type="file"
                 accept="video/*"
                 disabled={capturing}
@@ -172,14 +175,15 @@ export default function PronunciationPractice() {
                 }}
               />
             </label>
-            <p>Keep your mouth visible and include audio.</p>
-            {recording && <p>Selected recording: {recording.name}</p>}
+            <p className="my-4">Keep your mouth visible and include audio.</p>
+            {recording && <p className="my-4">Selected recording: {recording.name}</p>}
             <VideoPreview file={recording} />
           </section>
         </div>
 
-        <div className="actions">
+        <div className="flex flex-wrap gap-3">
           <button
+            className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60"
             type="button"
             disabled={capturing || !word.trim() || !recording}
             onClick={() => void analyze('transcription')}
@@ -188,6 +192,7 @@ export default function PronunciationPractice() {
           </button>
 
           <button
+            className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60"
             type="button"
             disabled={capturing || !word.trim() || !recording || !example}
             onClick={() => void analyze('comparison')}
@@ -197,15 +202,15 @@ export default function PronunciationPractice() {
         </div>
       </fieldset>
 
-      <p role="status" aria-live="polite">{status}</p>
-      {error && <p role="alert" className="error">{error}</p>}
+      <p className="my-4" role="status" aria-live="polite">{status}</p>
+      {error && <p role="alert" className="my-4 text-[#b42318]">{error}</p>}
 
       {transcription && (
-        <section className="card">
-          <h2>Speech recognition</h2>
-          <p>Expected: {transcription.expected}</p>
-          <p>Heard: {transcription.heard || '(No speech detected)'}</p>
-          <p>
+        <section className="mb-5 rounded-xl border border-[#dce1eb] bg-white p-5">
+          <h2 className="mb-[0.83em] text-[1.5em] leading-normal font-bold">Speech recognition</h2>
+          <p className="my-4">Expected: {transcription.expected}</p>
+          <p className="my-4">Heard: {transcription.heard || '(No speech detected)'}</p>
+          <p className="my-4">
             {transcription.match
               ? 'The recognized words match.'
               : 'The recognized words do not match.'}
@@ -214,24 +219,24 @@ export default function PronunciationPractice() {
       )}
 
       {comparison && (
-        <section className="card">
-          <h2>Mouth movement results</h2>
+        <section className="mb-5 rounded-xl border border-[#dce1eb] bg-white p-5">
+          <h2 className="mb-[0.83em] text-[1.5em] leading-normal font-bold">Mouth movement results</h2>
 
-          <p>
+          <p className="my-4">
             Your duration: {comparison.user_ms} ms.
             Example duration: {comparison.example_ms} ms.
           </p>
 
-          <ul>
+          <ul className="my-4 list-disc pl-10">
             {comparison.feedback.map((item) => (
-              <li key={item.stage}>
+              <li className="mb-2.5" key={item.stage}>
                 <strong>{item.stage}:</strong> {item.notes.join('; ')}
               </li>
             ))}
           </ul>
 
           <img
-            className="comparison-plot"
+            className="mt-5 block w-full"
             src={`${mediaUrl(comparison.png_url)}?v=${plotVersion}`}
             alt="Graphs comparing mouth opening, width, and shape"
           />

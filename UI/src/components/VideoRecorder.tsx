@@ -125,25 +125,25 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
 
   return (
     <div>
-      <video ref={preview} autoPlay muted playsInline style={{ display: cameraReady ? 'block' : 'none' }} aria-label="Live camera preview" />
-      <div className="actions">
+      <video ref={preview} autoPlay muted playsInline className={`mt-4 max-h-80 w-full rounded-lg bg-[#111] ${cameraReady ? 'block' : 'hidden'}`} aria-label="Live camera preview" />
+      <div className="flex flex-wrap gap-3">
         {!cameraReady ? (
-          <button type="button" disabled={disabled || opening} onClick={() => void openCamera()}>
+          <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" disabled={disabled || opening} onClick={() => void openCamera()}>
             {opening ? 'Opening camera...' : 'Enable camera'}
           </button>
         ) : recording ? (
-          <button type="button" disabled={finishing} onClick={stopRecording}>
+          <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" disabled={finishing} onClick={stopRecording}>
             {finishing ? 'Saving recording...' : 'Stop recording'}
           </button>
         ) : (
           <>
-            <button type="button" disabled={disabled} onClick={startRecording}>Start recording</button>
-            <button type="button" onClick={closeCamera}>Close camera</button>
+            <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" disabled={disabled} onClick={startRecording}>Start recording</button>
+            <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" onClick={closeCamera}>Close camera</button>
           </>
         )}
       </div>
-      <p role="status">{recording && !finishing ? 'Recording camera and microphone...' : ''}</p>
-      {error && <p role="alert" className="error">{error}</p>}
+      <p className="my-4" role="status">{recording && !finishing ? 'Recording camera and microphone...' : ''}</p>
+      {error && <p role="alert" className="my-4 text-[#b42318]">{error}</p>}
     </div>
   )
 }
