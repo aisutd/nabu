@@ -19,7 +19,7 @@ def learner_feedback(transcription, comparison):
         else:
             observations.append("No opening or width differences exceeded the current geometric thresholds.")
 
-    if transcription is not None and not transcription["match"]:
+    if transcription is not None and transcription["match"] is False:
         title = "Listen to your attempt again"
         action = "Replay your recording, then repeat the expected word clearly. Recognition can make mistakes."
     elif differences:

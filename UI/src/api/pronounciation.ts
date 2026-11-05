@@ -37,7 +37,7 @@ export type Comparison = {
   }[]
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: RequestInit,
 ): Promise<T> {

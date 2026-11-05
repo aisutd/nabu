@@ -273,6 +273,30 @@ Similarity is experimental and uncalibrated; it is not a pronunciation score
 or percentage. Existing geometric comparison remains available when the neural
 model cannot run. End-to-end inference still needs the compatible checkpoint.
 
+Reusable speaking activities — all workflows
+-------------------------------------------
+Use UI/src/components/speaking/SpeakingActivity.tsx for any exercise that needs
+spoken input. Full integration examples and props are in that folder's README.md.
+The practice page now demonstrates visible-reference video, hidden-reference video,
+microphone-only expected-word practice, and free-response audio.
+
+Backend: pronounciation/speaking.py provides POST /speaking/recordings,
+POST /speaking/review, and GET /speaking/exercises/{exercise_id}. It reuses the
+existing pronunciation analysis, model, and processing lock. Reference selection
+happens on the server; hiding a reference does not disable analysis.
+
+Set expectedText for standalone word/sentence practice; omit it for free speech.
+For lesson-owned answers, use exerciseId, e.g. "say-june". The server registry's
+answer overrides browser-provided text. Add real lesson IDs to EXERCISES or replace
+that registry with a lesson DB. Parent workflows receive onComplete(result) and
+own progress persistence/continuation decisions. No grading threshold is invented.
+
+Audio-only mode never requests video permission. Sentence and free-response tasks
+skip the single-word mouth model. Free responses return match=null, not a verdict.
+Failures/skipped checks are explicit; successful results are preserved. Reference
+video, direct uploads, previous-attempt replay, and diagnostic output are optional.
+Restart Vite and the backend after this update to enable the /speaking routes.
+
 Learner practice workflow
 -------------------------
 1) Start the pronunciation API with NABU_MOUTH_CHECKPOINT set to the trained

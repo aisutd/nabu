@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 
 type Props = {
+  capture?: 'audio' | 'video'
+  maxDurationMs?: number
   disabled: boolean
   onRecording: (file: File) => void
   onRecordingChange: (recording: boolean) => void
 }
 
-export default function VideoRecorder({ disabled, onRecording, onRecordingChange }: Props) {
+export default function VideoRecorder({ disabled, onRecording, onRecordingChange, capture = 'video', maxDurationMs = 4500 }: Props) {
   const preview = useRef<HTMLVideoElement>(null)
   const stream = useRef<MediaStream | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
@@ -25,9 +27,9 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
         setFinishing(true)
         recorder.current.stop()
       }
-    }, 4500)
+    }, maxDurationMs)
     return () => window.clearTimeout(timer)
-  }, [recording])
+  }, [recording, maxDurationMs])
 
   useEffect(() => {
     mounted.current = true
@@ -53,14 +55,14 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
   async function openCamera() {
     setError('')
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setError('Camera recording is unavailable. Use localhost or HTTPS in a supported browser, or upload a video.')
+      setError('Recording is unavailable. Use localhost or HTTPS in a supported browser, or upload a recording.')
       return
     }
 
     setOpening(true)
     try {
       const media = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: capture === 'video' ? { facingMode: 'user' } : false,
         audio: true,
       })
       if (!mounted.current) {
@@ -91,20 +93,18 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
     if (!stream.current) return
     setError('')
     try {
-      const mimeType = [
-        'video/webm;codecs=vp8,opus',
-        'video/webm',
-        'video/mp4',
-      ].find((type) => MediaRecorder.isTypeSupported(type))
-      if (!mimeType) throw new Error('This browser cannot record MP4 or WebM. Upload a video instead.')
+      const mimeType = (capture === 'audio'
+        ? ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+        : ['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4']).find((type) => MediaRecorder.isTypeSupported(type))
+      if (!mimeType) throw new Error('This browser cannot record a supported format. Upload a recording instead.')
 
-      const capture = new MediaRecorder(stream.current, { mimeType })
+      const mediaRecorder = new MediaRecorder(stream.current, { mimeType })
       const chunks: Blob[] = []
       let failed = false
-      capture.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data)
       }
-      capture.onerror = () => {
+      mediaRecorder.onerror = () => {
         failed = true
         if (!mounted.current) return
         setError('Recording failed. Please try again.')
@@ -113,7 +113,7 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
         onRecordingChange(false)
         closeCamera()
       }
-      capture.onstop = () => {
+      mediaRecorder.onstop = () => {
         if (!mounted.current) return
         setRecording(false)
         setFinishing(false)
@@ -121,15 +121,15 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
         closeCamera()
         if (failed) return
         if (!chunks.length) {
-          setError('No video was captured. Please try again.')
+          setError('No media was captured. Please try again.')
           return
         }
-        const type = capture.mimeType || mimeType
-        const extension = type.includes('mp4') ? 'mp4' : 'webm'
+        const type = mediaRecorder.mimeType || mimeType
+        const extension = type.includes('mp4') ? (capture === 'audio' ? 'm4a' : 'mp4') : type.includes('ogg') ? 'ogg' : 'webm'
         onRecording(new File(chunks, `practice-${Date.now()}.${extension}`, { type }))
       }
-      recorder.current = capture
-      capture.start()
+      recorder.current = mediaRecorder
+      mediaRecorder.start()
       setRecording(true)
       onRecordingChange(true)
     } catch (err) {
@@ -145,18 +145,18 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
 
   return (
     <div>
-      <div className="relative aspect-video overflow-hidden rounded-xl bg-foreground">
-        <video
+      <div className={`relative overflow-hidden rounded-xl bg-foreground ${capture === 'video' ? 'aspect-video' : 'min-h-32'}`}>
+        {capture === 'video' && <video
           ref={preview}
           autoPlay
           muted
           playsInline
           className={`h-full w-full object-contain ${cameraReady ? 'block' : 'hidden'}`}
           aria-label="Live camera preview"
-        />
-        {!cameraReady && (
+        />}
+        {(!cameraReady || capture === 'audio') && (
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-background">
-            Enable your camera when you’re ready.
+            {capture === 'audio' ? (cameraReady ? 'Microphone ready' : 'Enable your microphone when you’re ready.') : 'Enable your camera when you’re ready.'}
           </div>
         )}
         {recording && (
@@ -169,7 +169,7 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
       <div className="mt-4 flex flex-wrap gap-3">
         {!cameraReady ? (
           <button className="cursor-pointer rounded-xl border-0 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={disabled || opening} onClick={() => void openCamera()}>
-            {opening ? 'Opening camera...' : 'Enable camera'}
+            {opening ? 'Opening…' : capture === 'audio' ? 'Enable microphone' : 'Enable camera'}
           </button>
         ) : recording ? (
           <button className="cursor-pointer rounded-xl border-0 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={finishing} onClick={stopRecording}>
@@ -178,11 +178,11 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
         ) : (
           <>
             <button className="cursor-pointer rounded-xl border-0 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={disabled} onClick={startRecording}>Start recording</button>
-            <button className="cursor-pointer rounded-xl border-0 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40" type="button" onClick={closeCamera}>Close camera</button>
+            <button className="cursor-pointer rounded-xl border-0 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40" type="button" onClick={closeCamera}>{capture === 'audio' ? 'Close microphone' : 'Close camera'}</button>
           </>
         )}
       </div>
-      <p className="mt-2 min-h-5 text-xs text-muted-foreground" role="status">{recording && !finishing ? 'Recording camera and microphone...' : ''}</p>
+      <p className="mt-2 min-h-5 text-xs text-muted-foreground" role="status">{recording && !finishing ? (capture === 'audio' ? 'Recording microphone…' : 'Recording camera and microphone…') : ''}</p>
       {error && <p role="alert" className="my-4 text-destructive">{error}</p>}
     </div>
   )

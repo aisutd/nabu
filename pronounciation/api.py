@@ -329,3 +329,11 @@ def review_attempt(user_id: UUID, example_id: UUID, label: str):
             # Preserve the other check's result without exposing internal exceptions.
             errors[name] = "This check could not complete. Try another recording or inspect the server logs."
     return {**results, "errors": errors, "feedback": learner_feedback(**results)}
+
+
+# Shared speaking workflows reuse the same capture processing, model, and lock.
+from .speaking import create_speaking_router
+
+app.include_router(create_speaking_router(
+    DATA, REFERENCE_DIR, REFERENCE_FILES, upload_video, comparison, processing,
+))
