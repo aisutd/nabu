@@ -93,3 +93,5 @@ uvicorn[standard]==0.54.0
 python-multipart
 svgpathtools
 scipy
+# Neural mouth encoder inference and training.
+torch

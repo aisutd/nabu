@@ -8,6 +8,20 @@ export type Transcription = {
   match: boolean
 }
 
+export type NeuralResult =
+  | {
+      available: true
+      checkpoint: string
+      cosine_similarity: number
+      embedding_dimension: number
+      metric: string
+      note: string
+    }
+  | {
+      available: false
+      reason: string
+    }
+
 export type Comparison = {
   user_ms: number
   example_ms: number
@@ -15,6 +29,7 @@ export type Comparison = {
   user_features: number[][]
   example_features: number[][]
   png_url: string
+  neural?: NeuralResult
   feedback: {
     stage: string
     shape_error: number

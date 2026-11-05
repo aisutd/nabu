@@ -1,4 +1,5 @@
 import { mediaUrl } from '../../api/pronounciation'
+import NeuralResultPanel from './neural_result'
 import type {
   PronunciationPracticeState,
   Stage,
@@ -208,6 +209,12 @@ export default function PracticeResults({ practice }: Props) {
               </p>
             </section>
           </div>
+
+          <NeuralResultPanel
+            result={comparison?.neural}
+            hasComparison={Boolean(comparison)}
+            processing={mouthState === 'running'}
+          />
 
           <section className="mt-6 pt-5">
             <h3 className="font-semibold">Movement comparison plot</h3>

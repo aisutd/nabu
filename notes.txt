@@ -243,6 +243,36 @@ Check for local work before switching/pulling; commit or stash it if needed:
   git switch zxahamza20
   git pull --ff-only origin zxahamza20
 
+Neural mouth model — checkpoint setup
+------------------------------------
+The React analysis workspace displays the neural result already returned by
+POST /comparisons. No extra frontend request is needed. The model runs in Python.
+
+Inside the activated environment:
+  python -m pip install -r requirements.txt
+
+Obtain the trained .pt checkpoint from the model author. The API requires
+training_mode="multivsr-finetune", input_shape=(29, 40, 3), and compatible
+MouthEncoder weights. The baseline mouth_training.py checkpoints use different
+training_mode values and are not accepted by this API as currently written.
+
+Before starting the backend, replace this placeholder with the actual path:
+  export NABU_MOUTH_CHECKPOINT="/absolute/path/to/trained_model.pt"
+  python -m uvicorn pronounciation.api:app --reload --port 8000
+
+Check model loading directly at:
+  http://127.0.0.1:8000/models/mouth
+A 503 response means the checkpoint cannot be found or loaded; inspect detail.
+The default checkpoint path in api.py is Windows-specific, so set the environment
+variable on macOS. Restart the server after changing the checkpoint.
+
+Use one isolated word per clip, at most five seconds long, with a detectable
+mouth at every sampled frame. The analysis workspace shows cosine similarity,
+checkpoint, and embedding dimensions, or the backend's unavailability reason.
+Similarity is experimental and uncalibrated; it is not a pronunciation score
+or percentage. Existing geometric comparison remains available when the neural
+model cannot run. End-to-end inference still needs the compatible checkpoint.
+
 Web app — primary run path
 --------------------------
 First create/activate the Python environment and install dependencies using
