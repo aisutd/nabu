@@ -73,7 +73,7 @@ export default function PracticeResults({ practice }: Props) {
         </p>
       )}
 
-      <section className="mt-8 border-t border-[#e4d8c7] pt-8">
+      <section className="mt-8 pt-8">
         <h2 className="text-2xl font-semibold tracking-tight">
           Your feedback
         </h2>
@@ -134,7 +134,7 @@ export default function PracticeResults({ practice }: Props) {
           Analysis workspace
         </summary>
 
-        <div className="border-t border-[#d7c5ad] p-5">
+        <div className="p-5">
           <p className="text-sm text-[#756354]">
             Inspect the processing stages or run each check separately.
           </p>
@@ -209,7 +209,7 @@ export default function PracticeResults({ practice }: Props) {
             </section>
           </div>
 
-          <section className="mt-6 border-t border-[#d7c5ad] pt-5">
+          <section className="mt-6 pt-5">
             <h3 className="font-semibold">Movement comparison plot</h3>
 
             {comparison ? (

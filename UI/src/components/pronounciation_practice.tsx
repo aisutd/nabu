@@ -15,9 +15,9 @@ export default function PronunciationPractice() {
 
   return (
     <div className="min-h-screen bg-[#f8f3ea] text-[#38271f]">
-      <header className="border-b border-[#e4d8c7]">
+      <header>
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
-          <span className="text-xl font-bold tracking-tight">nabu</span>
+          <span className="text-2xl font-bold tracking-tight">nabu</span>
         </div>
       </header>
 
