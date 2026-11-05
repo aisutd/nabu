@@ -74,58 +74,17 @@ export default function PracticeResults({ practice }: Props) {
         </p>
       )}
 
-      <section className="mt-8 pt-8">
-        <h2 className="text-2xl font-semibold tracking-tight">
-          Your feedback
-        </h2>
-
-        {!transcription && !comparison ? (
-          <p className="mt-3 text-[#756354]">
-            Your recognized words and mouth-movement feedback will appear
-            here after review.
-          </p>
-        ) : (
-          <div className="mt-5 grid gap-6 md:grid-cols-2">
-            <div>
-              <h3 className="font-semibold">What we heard</h3>
-              {transcription ? (
-                <>
-                  <p className="mt-2 text-xl">
-                    “{transcription.heard || 'No speech detected'}”
-                  </p>
-                  <p className="mt-2 text-sm text-[#756354]">
-                    {transcription.match
-                      ? 'The recognized words match your phrase.'
-                      : `Expected: “${transcription.expected}”. Listen to your attempt and try again.`}
-                  </p>
-                </>
-              ) : (
-                <p className="mt-2 text-sm text-[#756354]">
-                  No speech result for this run.
-                </p>
-              )}
-            </div>
-
-            <div>
-              <h3 className="font-semibold">Mouth movement</h3>
-              {comparison ? (
-                <ul className="mt-2 space-y-3 text-sm leading-relaxed">
-                  {comparison.feedback.map((item) => (
-                    <li key={item.stage}>
-                      <strong>{item.stage}: </strong>
-                      {item.notes.join('; ')}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-[#756354]">
-                  No mouth-comparison result for this run.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
+      {practice.feedback && (
+        <section aria-label="Your review" className="mt-8 rounded-2xl bg-[#fffcf7] p-5">
+          <h2 className="text-xl font-semibold">{practice.feedback.title}</h2>
+          <ul className="mt-3 space-y-2 text-sm">
+            {practice.feedback.observations.map((text) => <li key={text}>{text}</li>)}
+          </ul>
+          <p className="mt-4 font-medium">{practice.feedback.next_action}</p>
+          <button type="button" onClick={practice.retry} disabled={busy || capturing}
+            className="mt-4 rounded-xl bg-[#513529] px-5 py-3 text-sm font-semibold text-[#fffaf2] disabled:opacity-40">Try again</button>
+        </section>
+      )}
 
       <details
         open
@@ -136,6 +95,59 @@ export default function PracticeResults({ practice }: Props) {
         </summary>
 
         <div className="p-5">
+          <section className="mt-8 pt-8">
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Your feedback
+            </h2>
+
+            {!transcription && !comparison ? (
+              <p className="mt-3 text-[#756354]">
+                Your recognized words and mouth-movement feedback will appear
+                here after review.
+              </p>
+            ) : (
+              <div className="mt-5 grid gap-6 md:grid-cols-2">
+                <div>
+                  <h3 className="font-semibold">What we heard</h3>
+                  {transcription ? (
+                    <>
+                      <p className="mt-2 text-xl">
+                        “{transcription.heard || 'No speech detected'}”
+                      </p>
+                      <p className="mt-2 text-sm text-[#756354]">
+                        {transcription.match
+                          ? 'The recognized words match your phrase.'
+                          : `Expected: “${transcription.expected}”. Listen to your attempt and try again.`}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-[#756354]">
+                      No speech result for this run.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="font-semibold">Mouth movement</h3>
+                  {comparison ? (
+                    <ul className="mt-2 space-y-3 text-sm leading-relaxed">
+                      {comparison.feedback.map((item) => (
+                        <li key={item.stage}>
+                          <strong>{item.stage}: </strong>
+                          {item.notes.join('; ')}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-[#756354]">
+                      No mouth-comparison result for this run.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
           <p className="text-sm text-[#756354]">
             Inspect the processing stages or run each check separately.
           </p>
@@ -210,6 +222,7 @@ export default function PracticeResults({ practice }: Props) {
             </section>
           </div>
 
+          {practice.feedback && <p className="mt-4 text-xs text-[#756354]">{practice.feedback.neural_note}</p>}
           <NeuralResultPanel
             result={comparison?.neural}
             hasComparison={Boolean(comparison)}

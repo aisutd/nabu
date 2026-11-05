@@ -18,6 +18,18 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if (!recording) return
+    // Leave a small margin for media-container timing under the five-second limit.
+    const timer = window.setTimeout(() => {
+      if (recorder.current?.state === 'recording') {
+        setFinishing(true)
+        recorder.current.stop()
+      }
+    }, 4500)
+    return () => window.clearTimeout(timer)
+  }, [recording])
+
+  useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false

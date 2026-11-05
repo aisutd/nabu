@@ -273,6 +273,30 @@ Similarity is experimental and uncalibrated; it is not a pronunciation score
 or percentage. Existing geometric comparison remains available when the neural
 model cannot run. End-to-end inference still needs the compatible checkpoint.
 
+Learner practice workflow
+-------------------------
+1) Start the pronunciation API with NABU_MOUTH_CHECKPOINT set to the trained
+   checkpoint, then start Vite. Restart Vite after adding the /practice proxy.
+2) Choose a word. GET /practice lists installed demo references and loads its
+   video automatically; users do not need to upload the example.
+3) Watch the visual reference, enable camera/microphone, and record one word.
+   Browser capture stops automatically after about 4.5 seconds to leave a margin
+   under the neural backend's five-second limit. Uploading an attempt is optional.
+4) Review my attempt uploads the videos and calls POST /practice/review.
+   Speech and movement checks run independently, retaining partial results.
+   Feedback prioritizes recognized-word mismatches, then observed geometric
+   differences. Neural similarity stays diagnostic until thresholds are calibrated.
+5) Try again keeps the selected word/reference and makes the previous recording
+   replayable for this session. No account history or progress database is added.
+6) The expanded Analysis workspace retains raw results, plots, and model details.
+   Demo setup controls allow a custom word/reference.
+
+Reference assets: pronounciation/test_data/video/{bad,back,bail,june}_browser.mp4
+and Kent_browser.mp4. These local demo clips have no audio; the UI labels them as
+visual references. Copy the assets to any deployment; they are not npm packages.
+Only installed files appear in the library. Add audiovisual references before
+presenting the activity as a listening exercise.
+
 Web app — primary run path
 --------------------------
 First create/activate the Python environment and install dependencies using

@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
+  listPracticeWords,
+  loadPracticeReference,
+  reviewRecordings,
   compareRecordings,
   transcribeRecording,
   uploadVideo,
 } from '../api/pronounciation'
 import type {
+  PracticeWord,
+  LearnerFeedback,
   Comparison,
   Transcription,
 } from '../api/pronounciation'
@@ -33,7 +38,51 @@ export default function usePronunciationPractice() {
   const [speechState, setSpeechState] = useState<Stage>('idle')
   const [mouthState, setMouthState] = useState<Stage>('idle')
 
+  const [lessons, setLessons] = useState<PracticeWord[]>([])
+  const [lesson, setLesson] = useState<PracticeWord | null>(null)
+  const [loadingReference, setLoadingReference] = useState(false)
+  const [libraryError, setLibraryError] = useState('')
+  const [feedback, setFeedback] = useState<LearnerFeedback | null>(null)
+  const [previousAttempt, setPreviousAttempt] = useState<File | null>(null)
+  const referenceRequest = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    listPracticeWords(controller.signal).then(setLessons).catch(() => {
+      if (!controller.signal.aborted) setLibraryError('Could not load practice words. Check the backend, then reload the page.')
+    })
+    return () => { controller.abort(); referenceRequest.current?.abort() }
+  }, [])
+
+  async function selectLesson(id: string) {
+    referenceRequest.current?.abort()
+    const selected = lessons.find((item) => item.id === id)
+    setLesson(selected ?? null)
+    changeWord(selected?.word ?? '')
+    changeExample(null)
+    changeRecording(null)
+    setPreviousAttempt(null)
+    if (!selected) { setLoadingReference(false); return }
+    const controller = new AbortController()
+    referenceRequest.current = controller
+    setLoadingReference(true)
+    try {
+      const file = await loadPracticeReference(selected, controller.signal)
+      if (!controller.signal.aborted) changeExample(file)
+    } catch {
+      if (!controller.signal.aborted) setError('Could not load the reference. Select the word again to retry.')
+    } finally {
+      if (!controller.signal.aborted) setLoadingReference(false)
+    }
+  }
+
+  function retry() {
+    if (recording) setPreviousAttempt(recording)
+    changeRecording(null)
+  }
+
   function clearResults() {
+    setFeedback(null)
     setTranscription(null)
     setComparison(null)
     setStatus('')
@@ -61,7 +110,7 @@ export default function usePronunciationPractice() {
   }
 
   async function analyze(mode: AnalysisMode) {
-    if (busy || capturing) return
+    if (busy || capturing || loadingReference) return
 
     const label = word.trim()
 
@@ -96,6 +145,31 @@ export default function usePronunciationPractice() {
       setError(err instanceof Error ? err.message : 'Upload failed.')
       setStatus('Could not prepare the videos.')
       setBusy(false)
+      return
+    }
+
+    if (mode === 'all') {
+      setSpeechState('running')
+      setMouthState('running')
+      setStatus('Reviewing words and mouth movement…')
+      try {
+        const result = await reviewRecordings(userId!, referenceId!, label)
+        setTranscription(result.transcription)
+        setComparison(result.comparison)
+        setFeedback(result.feedback)
+        setPlotVersion(Date.now())
+        setSpeechState(result.transcription ? 'done' : 'error')
+        setMouthState(result.comparison ? 'done' : 'error')
+        setError(Object.values(result.errors).join(' '))
+        setStatus(Object.keys(result.errors).length ? 'Some checks could not complete.' : 'Your review is ready.')
+      } catch (err) {
+        setSpeechState('error')
+        setMouthState('error')
+        setError(err instanceof Error ? err.message : 'Review failed.')
+        setStatus('Review could not complete.')
+      } finally {
+        setBusy(false)
+      }
       return
     }
 
@@ -148,6 +222,7 @@ export default function usePronunciationPractice() {
   }
 
   return {
+    lessons, lesson, loadingReference, libraryError, feedback, previousAttempt, selectLesson, retry,
     word,
     example,
     recording,

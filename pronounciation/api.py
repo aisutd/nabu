@@ -1,4 +1,5 @@
 import os
+import logging
 import re
 import shutil
 import subprocess
@@ -17,6 +18,8 @@ matplotlib.use("Agg")
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from .learner_feedback import learner_feedback
 
 from pronounciation.mouth_training import MouthEncoder
 from pronounciation.preprocess_recordings import normalize_landmarks, resample_sequence
@@ -49,6 +52,28 @@ processing = Lock()
 MODEL_PATH = Path(os.environ.get("NABU_MOUTH_CHECKPOINT", r"C:\NabuData\models\nabu_multivsr_overnight_b0050.pt"))
 MODEL_SHAPE = (29, 40, 3)
 MAX_WORD_SECONDS = 5.0
+
+# Curated local demo references. Do not expose arbitrary filesystem paths.
+REFERENCE_DIR = Path(__file__).resolve().parent / "test_data" / "video"
+REFERENCE_FILES = {word: f"{word}_browser.mp4" for word in ("bad", "back", "bail", "june")}
+REFERENCE_FILES["kent"] = "Kent_browser.mp4"
+
+
+@app.get("/practice")
+def practice_library():
+    return [
+        {"id": word, "word": word, "has_audio": False, "video_url": f"/practice/{word}/video"}
+        for word, filename in REFERENCE_FILES.items()
+        if (REFERENCE_DIR / filename).is_file()
+    ]
+
+
+@app.get("/practice/{word}/video")
+def practice_reference(word: str):
+    filename = REFERENCE_FILES.get(word)
+    if filename is None or not (REFERENCE_DIR / filename).is_file():
+        raise HTTPException(404, "Practice reference not available")
+    return FileResponse(REFERENCE_DIR / filename, media_type="video/mp4")
 
 
 def video_path(recording_id: UUID):
@@ -280,3 +305,27 @@ def mouth_model_info():
     except RuntimeError as error:
         raise HTTPException(503, str(error)) from error
     return {**info, "loaded": True, "device": "cpu"}
+
+
+@app.post("/practice/review")
+def review_attempt(user_id: UUID, example_id: UUID, label: str):
+    if len(label.strip().split()) != 1:
+        raise HTTPException(422, "Learner practice requires one isolated word")
+    # Validate both IDs before expensive processing; each check acquires its own lock.
+    video_path(user_id)
+    video_path(example_id)
+    results = {"transcription": None, "comparison": None}
+    errors = {}
+    for name, operation in (
+        ("transcription", lambda: transcription(user_id, label)),
+        ("comparison", lambda: comparison(user_id, example_id, label)),
+    ):
+        try:
+            results[name] = operation()
+        except HTTPException as error:
+            errors[name] = str(error.detail)
+        except Exception:
+            logging.getLogger(__name__).exception("Learner review %s failed", name)
+            # Preserve the other check's result without exposing internal exceptions.
+            errors[name] = "This check could not complete. Try another recording or inspect the server logs."
+    return {**results, "errors": errors, "feedback": learner_feedback(**results)}

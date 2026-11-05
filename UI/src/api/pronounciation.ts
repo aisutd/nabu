@@ -95,3 +95,40 @@ export function compareRecordings(
     method: 'POST',
   })
 }
+
+export type PracticeWord = {
+  id: string
+  word: string
+  has_audio: boolean
+  video_url: string
+}
+
+export type LearnerFeedback = {
+  title: string
+  observations: string[]
+  next_action: string
+  neural_status: 'available' | 'unavailable'
+  neural_note: string
+}
+
+export type Review = {
+  transcription: Transcription | null
+  comparison: Comparison | null
+  feedback: LearnerFeedback
+  errors: Partial<Record<'transcription' | 'comparison', string>>
+}
+
+export function listPracticeWords(signal: AbortSignal) {
+  return request<PracticeWord[]>('/practice', { method: 'GET', signal })
+}
+
+export async function loadPracticeReference(lesson: PracticeWord, signal: AbortSignal) {
+  const response = await fetch(mediaUrl(lesson.video_url), { signal })
+  if (!response.ok) throw new Error('Could not load the reference clip.')
+  return new File([await response.blob()], `${lesson.id}.mp4`, { type: 'video/mp4' })
+}
+
+export function reviewRecordings(userId: string, exampleId: string, word: string) {
+  const query = new URLSearchParams({ user_id: userId, example_id: exampleId, label: word })
+  return request<Review>(`/practice/review?${query}`, { method: 'POST' })
+}
