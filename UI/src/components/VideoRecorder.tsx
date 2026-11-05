@@ -56,10 +56,18 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
         return
       }
       stream.current = media
-      if (preview.current) preview.current.srcObject = media
+      if (preview.current) {
+        preview.current.srcObject = media
+        await preview.current.play()
+      }
+      if (!mounted.current) {
+        media.getTracks().forEach((track) => track.stop())
+        return
+      }
       setCameraReady(true)
     } catch (err) {
       if (mounted.current) {
+        closeCamera()
         setError(err instanceof Error ? err.message : 'Could not access the camera and microphone.')
       }
     } finally {
@@ -125,24 +133,44 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
 
   return (
     <div>
-      <video ref={preview} autoPlay muted playsInline className={`mt-4 max-h-80 w-full rounded-lg bg-[#111] ${cameraReady ? 'block' : 'hidden'}`} aria-label="Live camera preview" />
-      <div className="flex flex-wrap gap-3">
+      <div className="relative aspect-video overflow-hidden rounded-xl bg-[#251b17]">
+        <video
+          ref={preview}
+          autoPlay
+          muted
+          playsInline
+          className={`h-full w-full object-contain ${cameraReady ? 'block' : 'hidden'}`}
+          aria-label="Live camera preview"
+        />
+        {!cameraReady && (
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[#e7d9c7]">
+            Enable your camera when you’re ready.
+          </div>
+        )}
+        {recording && (
+          <span className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-black/65 px-3 py-1.5 text-xs font-medium text-white">
+            <span aria-hidden="true" className="size-2 rounded-full bg-red-400" />
+            Recording
+          </span>
+        )}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-3">
         {!cameraReady ? (
-          <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" disabled={disabled || opening} onClick={() => void openCamera()}>
+          <button className="cursor-pointer rounded-xl border-0 bg-[#513529] px-5 py-3 text-sm font-semibold text-[#fffaf2] hover:bg-[#38231b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#99633e] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={disabled || opening} onClick={() => void openCamera()}>
             {opening ? 'Opening camera...' : 'Enable camera'}
           </button>
         ) : recording ? (
-          <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" disabled={finishing} onClick={stopRecording}>
+          <button className="cursor-pointer rounded-xl border-0 bg-[#513529] px-5 py-3 text-sm font-semibold text-[#fffaf2] hover:bg-[#38231b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#99633e] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={finishing} onClick={stopRecording}>
             {finishing ? 'Saving recording...' : 'Stop recording'}
           </button>
         ) : (
           <>
-            <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" disabled={disabled} onClick={startRecording}>Start recording</button>
-            <button className="cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60" type="button" onClick={closeCamera}>Close camera</button>
+            <button className="cursor-pointer rounded-xl border-0 bg-[#513529] px-5 py-3 text-sm font-semibold text-[#fffaf2] hover:bg-[#38231b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#99633e] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={disabled} onClick={startRecording}>Start recording</button>
+            <button className="cursor-pointer rounded-xl border-0 bg-[#513529] px-5 py-3 text-sm font-semibold text-[#fffaf2] hover:bg-[#38231b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#99633e] disabled:cursor-not-allowed disabled:opacity-40" type="button" onClick={closeCamera}>Close camera</button>
           </>
         )}
       </div>
-      <p className="my-4" role="status">{recording && !finishing ? 'Recording camera and microphone...' : ''}</p>
+      <p className="mt-2 min-h-5 text-xs text-[#756354]" role="status">{recording && !finishing ? 'Recording camera and microphone...' : ''}</p>
       {error && <p role="alert" className="my-4 text-[#b42318]">{error}</p>}
     </div>
   )

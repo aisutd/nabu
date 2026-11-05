@@ -8,8 +8,11 @@ type Props = {
   capturing: boolean
   onExampleChange: (file: File | null) => void
   onRecordingChange: (file: File | null) => void
-  onCapturingChange: (capturing: boolean) => void
+  onCapturingChange: (value: boolean) => void
 }
+
+const uploadClass =
+  'block w-full min-w-0 text-sm text-[#756354] file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#eee1cc] file:px-3 file:py-2 file:font-medium file:text-[#513529] disabled:opacity-50'
 
 export default function PracticeVideos({
   example,
@@ -21,31 +24,47 @@ export default function PracticeVideos({
   onCapturingChange,
 }: Props) {
   return (
-    <div className="my-6 grid grid-cols-1 gap-5 min-[651px]:grid-cols-2">
-      <section className="mb-5 rounded-xl border border-[#dce1eb] bg-white p-5">
-        <h2 className="mb-[0.83em] text-[1.5em] leading-normal font-bold">
-          Example
-        </h2>
+    <div className="grid gap-6 md:grid-cols-2">
+      <section className="min-w-0 rounded-2xl border border-[#e4d8c7] bg-[#fffcf7] p-5">
+        <div className="mb-4 flex items-baseline gap-3">
+          <span className="text-sm font-semibold text-[#a27b51]">01</span>
+          <h2 className="text-lg font-semibold">Watch & listen</h2>
+        </div>
 
-        <label className="mb-4 grid gap-2">
-          Upload a reference video
+        <VideoPreview
+          file={example}
+          label="Add a reference clip to watch the example"
+        />
+
+        <label className="mt-5 grid gap-2 text-sm">
+          {example ? 'Replace reference clip' : 'Add reference clip'}
           <input
-            className="w-full rounded-lg border border-[#cbd2df] p-2.5"
             type="file"
             accept="video/mp4,video/quicktime,video/webm,.m4v"
+            disabled={busy || capturing}
+            className={uploadClass}
             onChange={(event) => {
               onExampleChange(event.target.files?.[0] ?? null)
             }}
           />
         </label>
 
-        <VideoPreview file={example} />
       </section>
 
-      <section className="mb-5 rounded-xl border border-[#dce1eb] bg-white p-5">
-        <h2 className="mb-[0.83em] text-[1.5em] leading-normal font-bold">
-          Your recording
-        </h2>
+      <section className="min-w-0 rounded-2xl border border-[#e4d8c7] bg-[#fffcf7] p-5">
+        <div className="mb-4 flex items-baseline gap-3">
+          <span className="text-sm font-semibold text-[#a27b51]">02</span>
+          <h2 className="text-lg font-semibold">Your turn</h2>
+        </div>
+
+        {recording && (
+          <div className="mb-5">
+            <p className="mb-2 truncate text-xs text-[#756354]">
+              Saved attempt: {recording.name}
+            </p>
+            <VideoPreview file={recording} label="Your saved attempt" />
+          </div>
+        )}
 
         <VideoRecorder
           disabled={busy}
@@ -53,30 +72,21 @@ export default function PracticeVideos({
           onRecording={onRecordingChange}
         />
 
-        <label className="mb-4 grid gap-2">
-          Or select a video
+        <label className="mt-5 grid gap-2 text-sm">
+          Or upload an attempt
           <input
-            className="w-full rounded-lg border border-[#cbd2df] p-2.5"
             type="file"
-            accept="video/*"
-            disabled={capturing}
+            accept="video/mp4,video/quicktime,video/webm,.m4v"
+            disabled={busy || capturing}
+            className={uploadClass}
             onChange={(event) => {
               onRecordingChange(event.target.files?.[0] ?? null)
             }}
           />
         </label>
 
-        <p className="my-4">
-          Keep your mouth visible and include audio.
-        </p>
 
-        {recording && (
-          <p className="my-4">
-            Selected recording: {recording.name}
-          </p>
-        )}
 
-        <VideoPreview file={recording} />
       </section>
     </div>
   )

@@ -1,44 +1,31 @@
-import type { AnalysisMode } from '../../hooks/use_pronounciation_practice'
-
 type Props = {
-  word: string
-  hasRecording: boolean
-  hasExample: boolean
-  capturing: boolean
-  onAnalyze: (mode: AnalysisMode) => Promise<void>
+  ready: boolean
+  busy: boolean
+  onReview: () => void
 }
 
-const buttonClass =
-  'cursor-pointer rounded-lg border-0 bg-[#5545d9] px-[18px] py-3 text-white disabled:cursor-default disabled:opacity-60'
-
 export default function PracticeActions({
-  word,
-  hasRecording,
-  hasExample,
-  capturing,
-  onAnalyze,
+  ready,
+  busy,
+  onReview,
 }: Props) {
-  const cannotTranscribe =
-    capturing || !word.trim() || !hasRecording
-
   return (
-    <div className="flex flex-wrap gap-3">
-      <button
-        className={buttonClass}
-        type="button"
-        disabled={cannotTranscribe}
-        onClick={() => void onAnalyze('transcription')}
-      >
-        Check pronunciation
-      </button>
+    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+      {(busy || ready) && (
+        <p className="text-sm text-[#756354] sm:mr-auto">
+          {busy
+            ? 'Taking a closer look at your attempt…'
+            : 'Both clips are ready. Let’s take a closer look.'}
+        </p>
+      )}
 
       <button
-        className={buttonClass}
         type="button"
-        disabled={cannotTranscribe || !hasExample}
-        onClick={() => void onAnalyze('comparison')}
+        disabled={!ready || busy}
+        onClick={onReview}
+        className="rounded-xl bg-[#513529] px-5 py-3 text-sm font-semibold text-[#fffaf2] transition hover:bg-[#38231b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#99633e] disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Compare mouth movement
+        {busy ? 'Reviewing…' : 'Review my attempt'}
       </button>
     </div>
   )
