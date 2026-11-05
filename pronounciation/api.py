@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from threading import Lock
 from uuid import UUID, uuid4
+from fastapi.middleware.cors import CORSMiddleware
 
 import cv2
 import matplotlib
@@ -20,12 +21,25 @@ from fastapi.staticfiles import StaticFiles
 from pronounciation.mouth_training import MouthEncoder
 from pronounciation.preprocess_recordings import normalize_landmarks, resample_sequence
 
-from .compare import compare, plot
+from .compare import compare, plot, feedback
 from .detector import MouthTracker
 from .transcribe import check
 from .video_input import landmarks_from_video, prepare_wav
 
 app = FastAPI(title="Nabu Pronunciation")
+
+allowed_origins = os.getenv(
+    "NABU_ALLOWED_ORIGINS",
+    "http://localhost:5173,capacitor://localhost,https://localhost",
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in allowed_origins],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
 DATA = Path("pronounciation/test_data/api")
 PLOTS = DATA / "plots"
 PLOTS.mkdir(parents=True, exist_ok=True)
@@ -34,7 +48,7 @@ processing = Lock()
 
 MODEL_PATH = Path(os.environ.get("NABU_MOUTH_CHECKPOINT", r"C:\NabuData\models\nabu_multivsr_overnight_b0050.pt"))
 MODEL_SHAPE = (29, 40, 3)
-MAX_WORD_SECONDS = 2.5
+MAX_WORD_SECONDS = 5.0
 
 
 def video_path(recording_id: UUID):
@@ -83,7 +97,7 @@ def mouth_input_from_video(path: Path):
             raise ValueError("Video needs at least three frames and a valid frame rate")
         duration = count / fps
         if duration > MAX_WORD_SECONDS:
-            raise ValueError("Neural comparison requires a trimmed single-word clip no longer than 2.5 seconds")
+            raise ValueError("Neural comparison requires a trimmed single-word clip no longer than 5.0 seconds")
 
         # Match MultiVSR: sample up to 29 evenly spaced frames, then normalize and resample to 29.
         positions = np.unique(np.linspace(0, count - 1, min(29, count)).round().astype(int))
@@ -142,19 +156,51 @@ def neural_result(user_path: Path, example_path: Path):
 
 @app.post("/recordings", status_code=201)
 def upload_video(video: UploadFile):
-    if Path(video.filename or "").suffix.lower() != ".mp4":
-        raise HTTPException(415, "Upload an MP4 video")
+    suffix = Path(video.filename or "").suffix.lower()
+
+    if suffix not in {".mp4", ".mov", ".webm", ".m4v"}:
+        video.file.close()
+        raise HTTPException(415, "Upload an MP4, MOV, WebM, or M4V video")
+
     recording_id = uuid4()
-    path = DATA / f"{recording_id}.mp4"
+    source = DATA / f"{recording_id}.upload{suffix}"
+    destination = DATA / f"{recording_id}.mp4"
+
     try:
-        with path.open("wb") as output:
+        with source.open("wb") as output:
             shutil.copyfileobj(video.file, output)
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-y",
+                "-i", str(source),
+                "-map", "0:v:0",
+                "-map", "0:a:0?",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-movflags", "+faststart",
+                str(destination),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as error:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(422, "Could not process this video") from error
     except Exception:
-        path.unlink(missing_ok=True)
+        destination.unlink(missing_ok=True)
         raise
     finally:
+        source.unlink(missing_ok=True)
         video.file.close()
-    return {"id": str(recording_id), "video_url": f"/media/{path.name}"}
+
+    return {
+        "id": str(recording_id),
+        "video_url": f"/media/{destination.name}",
+    }
 
 
 @app.post("/recordings/{recording_id}/transcription")
@@ -208,6 +254,7 @@ def comparison(user_id: UUID, example_id: UUID, label: str):
         "example_features": result["fr"].tolist(),
         "png_url": f"/media/{png.relative_to(DATA).as_posix()}",
         "neural": neural,
+        "feedback": feedback(result),
     }
 
 

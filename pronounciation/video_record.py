@@ -62,7 +62,8 @@ def add_audio(video_path, wav_path):
 
   subprocess.run(
     ["ffmpeg", "-y", "-i", video_path, "-i", str(wav_path),
-     "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-shortest", merged],
+     "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+     "-c:a", "aac", "-movflags", "+faststart", "-shortest", merged],
     check=True, capture_output=True,
   )
 

@@ -102,6 +102,40 @@ def compare(user, ref):
     "user_ms": u_ms, "ref_ms": r_ms,
   }
 
+def feedback(res):
+    edges = np.linspace(0, len(res["shape_err"]), 4).astype(int)
+    items = []
+
+    for k, name in enumerate(["start", "middle", "end"]):
+        a, b = edges[k], edges[k + 1]
+
+        if a == b:
+            continue
+
+        difference = (
+            res["fu"][a:b] - res["fr"][a:b]
+        ).mean(axis=0)
+
+        notes = []
+
+        if difference[0] > THRESHOLD:
+            notes.append("Your mouth opens more than the example")
+        elif difference[0] < -THRESHOLD:
+            notes.append("Your mouth opens less than the example")
+
+        if difference[1] > THRESHOLD:
+            notes.append("Your mouth is wider or more spread")
+        elif difference[1] < -THRESHOLD:
+            notes.append("Your mouth is narrower or more rounded")
+
+        items.append({
+            "stage": name,
+            "shape_error": float(res["shape_err"][a:b].mean()),
+            "notes": notes or ["Close to the example"],
+        })
+
+    return items
+
 def report(res):
   print(f"\nSpeed: you {res['user_ms']} ms, example {res['ref_ms']} ms")
 

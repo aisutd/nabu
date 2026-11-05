@@ -1,0 +1,220 @@
+<!doctype html>
+<!--
+  Temporary test page for handwriting/ocr/api.py.
+
+  HOW THIS PAGE GETS TO YOUR BROWSER
+    uvicorn runs api.py. The line app.mount("/tester", StaticFiles(directory=.../frontend, html=True)) in api.py tells
+    FastAPI to hand out the files in this folder, so opening http://127.0.0.1:8000/tester/ returns this file
+    (html=True means a request for the folder itself returns index.html).
+
+  HOW THE BROWSER TURNS THIS FILE INTO THE PAGE (top to bottom, in this order)
+    1. <head>: reads the title, the tab icon, and the <style> block. The CSS rules are stored and applied to the
+       elements as they get created.
+    2. <body>: creates each element in order (heading, hidden canvas, the three boxes, the empty results area) and
+       draws them on screen. At this point the buttons exist but do nothing yet, and the Errorfinder box is empty.
+    3. <script> (at the very end of <body>, so every element above already exists when it runs): runs once,
+       top to bottom. It doesn't send anything yet; it only SETS UP the page:
+         - creates the 12 errorfinder buttons inside the empty Errorfinder box
+         - attaches "when this happens, run this function" handlers to the file picker and all the buttons
+    4. After that, nothing runs until you do something. Every action below is a handler from step 3 firing:
+         - pick a file   -> the image is drawn onto the hidden canvas and shown as a preview
+         - click a button -> call() sends the canvas image + form fields to the API and shows the response
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Lay the page out at the device's real width (phones would otherwise pretend to be ~980px wide and zoom out) -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Tester</title>
+<!-- Empty tab icon so the browser doesn't request /favicon.ico (which would 404) -->
+<link rel="icon" href="data:,">
+
+<!-- STEP 1: styling. Each rule is "which elements { how they look }" -->
+<style>
+  /* Whole page: system font, 16px margin, content stops getting wider at 900px */
+  body { font-family: system-ui, sans-serif; margin: 16px; max-width: 900px; }
+  /* The three bordered boxes (Input, OCR, Errorfinder) */
+  fieldset { margin-bottom: 12px; }
+  label { margin-right: 12px; }
+  button { margin: 2px; }
+  /* Response box: scrolls when long, wraps long JSON lines instead of overflowing sideways */
+  pre { background: #f3f3f3; padding: 8px; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  /* Status colors, applied by the script by setting className to "err" or "ok" */
+  .err { color: #b00020; }
+  .ok { color: #2e7d32; }
+  /* #preview means "the element with id='preview'". pixelated keeps small images crisp when scaled up instead of
+     blurring them. min() so it shrinks on narrow phones */
+  #preview { max-width: min(300px, 100%); max-height: 300px; margin-top: 8px; border: 1px solid #ccc; image-rendering: pixelated; }
+</style>
+</head>
+
+<!-- STEP 2: the page's elements, created and drawn in this order. The id="..." on an element is the name the script
+     uses to find it later -->
+<body>
+<h1>API Tester</h1>
+
+<!-- The uploaded png is drawn here and the canvas contents are what get sent to the API.
+     hidden = exists on the page but isn't displayed -->
+<canvas id="canvas" hidden></canvas>
+<canvas id="screenSize" hidden></canvas> <!-- Used to capture the current screen size/display ratio -->
+
+<!-- Box 1: image upload and the form fields the errorfinder endpoints read -->
+<fieldset>
+  <legend>Input</legend>
+  <!-- Opens the system file picker (or camera/photos on phones) -->
+  <input id="file" type="file" accept="image/png,image/*">
+  <!-- Empty until the script fills in the file name and size after upload -->
+  <span id="fileInfo"></span>
+  <!-- Preview of exactly what gets sent, hidden until the script sets its image after upload -->
+  <div><img id="preview" alt="" hidden></div>
+  <p>
+    <!-- The character the handwriting is supposed to be -->
+    <label>expected <input id="expected" value="A" size="4"></label>
+    <!-- 0-1 (normalized) for the error endpoints, but px for cullPointsFromThreshold -->
+    <label>threshold <input id="threshold" type="number" step="0.01" value="0.1" style="width:6em"></label>
+    <!-- How many top results the leaderboard endpoints return -->
+    <label>N <input id="N" type="number" value="5" style="width:4em"></label>
+  </p>
+</fieldset>
+
+<!-- Box 2: OCR endpoints. data-ep is a custom attribute holding each button's endpoint path; the script reads it to
+     know where to send the request -->
+<fieldset>
+  <legend>OCR</legend>
+  <label>lang <input id="lang" value="en" size="4"></label>
+  <button data-ep="/ocr/text">text</button>
+  <button data-ep="/ocr/tuple">tuple</button>
+</fieldset>
+
+<!-- Box 3: errorfinder endpoints. The <div> starts empty; the script creates one button per endpoint inside it -->
+<fieldset>
+  <legend>Errorfinder</legend>
+  <div id="errorfinderButtons"></div>
+  <p><button id="runAll"><b>Run all</b></button></p>
+</fieldset>
+
+<!-- Starts empty. Each request adds a result box here, newest on top -->
+<div id="results"></div>
+
+<!-- STEP 3: runs once when the page loads. Everything up to "STEP 3a" only defines data and functions (nothing
+     happens yet); STEP 3a-3c at the bottom are what actually set the page up -->
+<script>
+//Errorfinder endpoints and the extra form fields each one takes (all take file + expected)
+//Names match the routes in api.py (/ocr/errorfinder/<name>); add a line here to get a button for a new endpoint
+const ERRORFINDER = {
+  findError: [],
+};
+
+//Shortcut for document.getElementById, e.g. $("expected") finds <input id="expected">
+const $ = (id) => document.getElementById(id);
+const canvas = $("canvas");
+
+//STEP 4a (runs when you pick a file): draw the uploaded png onto the hidden canvas, flattened onto white
+//Assigning a function to .onchange means "run this whenever the file picker's selection changes"
+$("file").onchange = () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  const img = new Image();
+  //Loading an image takes a moment, so the drawing code goes in onload, which the browser runs once the image is ready
+  img.onload = () => {
+    //Match the canvas to the image so it's sent at full resolution
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    //Fill white first so transparent pixels are sent as white paper, not transparent
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    //Free the temporary link to the local file now that it's drawn
+    URL.revokeObjectURL(img.src);
+    //Show exactly what gets sent (the flattened canvas contents) and un-hide the preview
+    $("preview").src = canvas.toDataURL("image/png");
+    $("preview").hidden = false;
+    $("fileInfo").textContent = `${f.name} (${canvas.width}×${canvas.height})`;
+  };
+  //Start loading: a temporary URL pointing at the local file. When it finishes, onload above runs
+  img.src = URL.createObjectURL(f);
+};
+
+//Converts the canvas to png bytes. toBlob hands back its result through a callback, so it's wrapped in a Promise,
+//which lets call() write "await canvasBlob()" to wait for the result
+function canvasBlob() {
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+//STEP 4b (runs when you click any endpoint button): POST to an endpoint and print the status, timing, and response
+//path: the endpoint URL, e.g. "/ocr/errorfinder/findError"
+//fields: extra form fields to send (e.g. expected, threshold, lang)
+//sendFile: whether to attach the canvas image (always true for the current endpoints)
+//async + await: "await" pauses this function until the slow thing (making the png, the network request) finishes,
+//without freezing the rest of the page
+async function call(path, fields = {}, sendFile = true) {
+  //Add a result box to the top of the results right away, so you can see the request is running
+  const box = document.createElement("div");
+  box.innerHTML = `<h3>${path} <small>running…</small></h3><pre></pre>`;
+  $("results").prepend(box);
+  const [status, pre] = [box.querySelector("small"), box.querySelector("pre")];
+
+  //Build the request body in the same format as an html form with a file upload, which is what FastAPI's
+  //File(...) and Form(...) parameters in api.py read
+  const form = new FormData();
+  if (sendFile) {
+    if (!$("file").files[0]) {
+      status.textContent = "no image uploaded";
+      status.className = "err";
+      return;
+    }
+    //Becomes the endpoint's "file" parameter in api.py
+    form.append("file", await canvasBlob(), "input.png");
+  }
+  //Each field becomes the matching Form(...) parameter in api.py (expected, threshold, N, lang)
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+
+  const t0 = performance.now();
+  try {
+    //Send the request and wait for the response. Relative path, so it goes to whichever server served this page
+    const res = await fetch(path, { method: "POST", body: sendFile ? form : undefined });
+    const text = await res.text();
+    //res.ok is true for 2xx status codes (success)
+    status.textContent = `${res.status} · ${(performance.now() - t0).toFixed(0)} ms`;
+    status.className = res.ok ? "ok" : "err";
+    //Pretty print JSON responses; anything else (e.g. "Internal Server Error") is shown as plain text
+    try { pre.textContent = JSON.stringify(JSON.parse(text), null, 1); } catch { pre.textContent = text; }
+  } catch (err) {
+    //The request never got a response (e.g. the server isn't running)
+    status.textContent = err.message;
+    status.className = "err";
+  }
+}
+
+//Collects the form fields an errorfinder endpoint needs: expected, plus threshold and/or N from the ERRORFINDER list
+//e.g. errorfinderFields("findErrorFromLeaderboard") -> { expected: "A", N: "5" }
+function errorfinderFields(name) {
+  const fields = { expected: $("expected").value };
+  for (const p of ERRORFINDER[name]) fields[p] = $(p).value;
+  return fields;
+}
+
+//STEP 3a: create one button per errorfinder endpoint inside the empty Errorfinder box, each wired to call()
+for (const name of Object.keys(ERRORFINDER)) {
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.onclick = () => call(`/ocr/errorfinder/${name}`, errorfinderFields(name));
+  $("errorfinderButtons").appendChild(b);
+}
+
+//STEP 3b: wire up the OCR buttons (every element with a data-ep attribute) to send the image plus the selected
+//language to the path in their data-ep
+document.querySelectorAll("[data-ep]").forEach((b) => (b.onclick = () => call(b.dataset.ep, { lang: $("lang").value })));
+
+//STEP 3c: wire up Run all to call every errorfinder endpoint, one after another
+//Sequential (await inside the loop) so the timings aren't skewed by requests queueing behind each other
+$("runAll").onclick = async () => {
+  $("results").innerHTML = "";
+  for (const name of Object.keys(ERRORFINDER)) await call(`/ocr/errorfinder/${name}`, errorfinderFields(name));
+};
+
+//The script ends here. From now on the page just waits; STEP 4a/4b run whenever you pick a file or click a button
+</script>
+</body>
+</html>
