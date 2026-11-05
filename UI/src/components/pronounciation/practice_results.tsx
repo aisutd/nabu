@@ -10,7 +10,7 @@ type Props = {
 }
 
 const secondaryButton =
-  'rounded-lg border border-[#d7c5ad] px-3 py-2 text-sm font-medium text-[#513529] hover:bg-[#eee1cc] disabled:cursor-not-allowed disabled:opacity-40'
+  'rounded-lg border border-border px-3 py-2 text-sm font-medium text-secondary-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40'
 
 function StatusLabel({ state }: { state: Stage }) {
   const labels = {
@@ -21,10 +21,10 @@ function StatusLabel({ state }: { state: Stage }) {
   }
 
   const colors = {
-    idle: 'bg-[#eee7dc] text-[#756354]',
-    running: 'bg-[#f3dfb9] text-[#775021]',
-    done: 'bg-[#e0e8d8] text-[#415834]',
-    error: 'bg-[#f5ded6] text-[#923d2c]',
+    idle: 'bg-muted text-muted-foreground',
+    running: 'bg-warning/20 text-foreground',
+    done: 'bg-success/20 text-foreground',
+    error: 'bg-destructive/10 text-destructive',
   }
 
   return (
@@ -60,7 +60,7 @@ export default function PracticeResults({ practice }: Props) {
       <p
         role="status"
         aria-live="polite"
-        className="mt-4 min-h-6 text-sm text-[#756354]"
+        className="mt-4 min-h-6 text-sm text-muted-foreground"
       >
         {status}
       </p>
@@ -68,29 +68,29 @@ export default function PracticeResults({ practice }: Props) {
       {error && (
         <p
           role="alert"
-          className="mt-2 rounded-lg border border-[#e3b9a9] bg-[#faeae2] p-3 text-sm text-[#923d2c]"
+          className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
           {error}
         </p>
       )}
 
       {practice.feedback && (
-        <section aria-label="Your review" className="mt-8 rounded-2xl bg-[#fffcf7] p-5">
+        <section aria-label="Your review" className="mt-8 rounded-xl bg-card p-5 shadow-card">
           <h2 className="text-xl font-semibold">{practice.feedback.title}</h2>
           <ul className="mt-3 space-y-2 text-sm">
             {practice.feedback.observations.map((text) => <li key={text}>{text}</li>)}
           </ul>
           <p className="mt-4 font-medium">{practice.feedback.next_action}</p>
           <button type="button" onClick={practice.retry} disabled={busy || capturing}
-            className="mt-4 rounded-xl bg-[#513529] px-5 py-3 text-sm font-semibold text-[#fffaf2] disabled:opacity-40">Try again</button>
+            className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-40">Try again</button>
         </section>
       )}
 
       <details
         open
-        className="mt-10 rounded-2xl border border-[#d7c5ad] bg-[#f1e8da]"
+        className="mt-10 rounded-xl border border-border bg-secondary"
       >
-        <summary className="cursor-pointer px-5 py-5 text-lg font-semibold">
+        <summary className="cursor-pointer px-5 py-5 font-heading text-lg font-semibold">
           Analysis workspace
         </summary>
 
@@ -101,7 +101,7 @@ export default function PracticeResults({ practice }: Props) {
             </h2>
 
             {!transcription && !comparison ? (
-              <p className="mt-3 text-[#756354]">
+              <p className="mt-3 text-muted-foreground">
                 Your recognized words and mouth-movement feedback will appear
                 here after review.
               </p>
@@ -114,14 +114,14 @@ export default function PracticeResults({ practice }: Props) {
                       <p className="mt-2 text-xl">
                         “{transcription.heard || 'No speech detected'}”
                       </p>
-                      <p className="mt-2 text-sm text-[#756354]">
+                      <p className="mt-2 text-sm text-muted-foreground">
                         {transcription.match
                           ? 'The recognized words match your phrase.'
                           : `Expected: “${transcription.expected}”. Listen to your attempt and try again.`}
                       </p>
                     </>
                   ) : (
-                    <p className="mt-2 text-sm text-[#756354]">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       No speech result for this run.
                     </p>
                   )}
@@ -139,7 +139,7 @@ export default function PracticeResults({ practice }: Props) {
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-sm text-[#756354]">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       No mouth-comparison result for this run.
                     </p>
                   )}
@@ -148,7 +148,7 @@ export default function PracticeResults({ practice }: Props) {
             )}
           </section>
 
-          <p className="text-sm text-[#756354]">
+          <p className="text-sm text-muted-foreground">
             Inspect the processing stages or run each check separately.
           </p>
 
@@ -160,7 +160,7 @@ export default function PracticeResults({ practice }: Props) {
             ].map((item) => (
               <div
                 key={item.name}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#fffcf7] p-4"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card p-4"
               >
                 <span className="text-sm font-medium">{item.name}</span>
                 <StatusLabel state={item.state} />
@@ -199,7 +199,7 @@ export default function PracticeResults({ practice }: Props) {
                   ? transcription.heard || 'No speech detected'
                   : 'Awaiting analysis'}
               </p>
-              <p className="mt-3 text-xs leading-relaxed text-[#756354]">
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                 This checks recognized words against the phrase. It is
                 not a pronunciation-quality score.
               </p>
@@ -222,7 +222,7 @@ export default function PracticeResults({ practice }: Props) {
             </section>
           </div>
 
-          {practice.feedback && <p className="mt-4 text-xs text-[#756354]">{practice.feedback.neural_note}</p>}
+          {practice.feedback && <p className="mt-4 text-xs text-muted-foreground">{practice.feedback.neural_note}</p>}
           <NeuralResultPanel
             result={comparison?.neural}
             hasComparison={Boolean(comparison)}
@@ -234,12 +234,12 @@ export default function PracticeResults({ practice }: Props) {
 
             {comparison ? (
               <img
-                className="mt-4 block w-full rounded-xl bg-white"
+                className="mt-4 block w-full rounded-xl bg-card"
                 src={`${mediaUrl(comparison.png_url)}?v=${plotVersion}`}
                 alt="Graphs comparing mouth opening, width, and shape"
               />
             ) : (
-              <div className="mt-4 rounded-xl border border-dashed border-[#c8b394] px-5 py-10 text-center text-sm text-[#756354]">
+              <div className="mt-4 rounded-xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground">
                 Run a mouth comparison to see the generated graphs.
               </div>
             )}

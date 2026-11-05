@@ -26,12 +26,12 @@ export default function VideoPreview({ file, label }: Props) {
 
   if (!file) {
     return (
-      <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed border-[#d7c5ad] bg-[#f4ecdf] px-6 text-center">
+      <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed border-border bg-muted px-6 text-center">
         <div>
-          <span aria-hidden="true" className="text-3xl text-[#a2876c]">
+          <span aria-hidden="true" className="text-3xl text-muted-foreground">
             ▷
           </span>
-          <p className="mt-2 text-sm text-[#756354]">{label}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{label}</p>
         </div>
       </div>
     )
@@ -54,9 +54,9 @@ export default function VideoPreview({ file, label }: Props) {
           )
         }}
         aria-label={label}
-        className="aspect-video w-full rounded-xl bg-[#251b17] object-contain"
+        className="aspect-video w-full rounded-xl bg-foreground object-contain"
       />
-      {error && <p role="alert" className="mt-2 text-sm text-[#923d2c]">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
     </div>
   )
 }

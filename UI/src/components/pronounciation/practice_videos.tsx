@@ -14,7 +14,7 @@ type Props = {
 }
 
 const uploadClass =
-  'block w-full min-w-0 text-sm text-[#756354] file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#eee1cc] file:px-3 file:py-2 file:font-medium file:text-[#513529] disabled:opacity-50'
+  'block w-full min-w-0 text-sm text-muted-foreground file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:font-medium file:text-secondary-foreground disabled:opacity-50'
 
 export default function PracticeVideos({
   lesson,
@@ -28,9 +28,9 @@ export default function PracticeVideos({
 }: Props) {
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <section className="min-w-0 rounded-2xl border border-[#e4d8c7] bg-[#fffcf7] p-5">
+      <section className="min-w-0 rounded-xl border border-border bg-card shadow-card p-5">
         <div className="mb-4 flex items-baseline gap-3">
-          <span className="text-sm font-semibold text-[#a27b51]">01</span>
+          <span className="text-sm font-semibold text-muted-foreground">01</span>
           <h2 className="text-lg font-semibold">Watch the example</h2>
         </div>
 
@@ -39,9 +39,9 @@ export default function PracticeVideos({
           label="Add a reference clip to watch the example"
         />
 
-        {lesson && <p className="mt-3 text-sm text-[#756354]">{lesson.word}{!lesson.has_audio && ' · Visual reference (no audio)'}</p>}
+        {lesson && <p className="mt-3 text-sm text-muted-foreground">{lesson.word}{!lesson.has_audio && ' · Visual reference (no audio)'}</p>}
         <details className="mt-4">
-          <summary className="cursor-pointer text-xs text-[#756354]">Demo setup: replace reference</summary>
+          <summary className="cursor-pointer text-xs text-muted-foreground">Demo setup: replace reference</summary>
         <label className="mt-5 grid gap-2 text-sm">
           {example ? 'Replace reference clip' : 'Add reference clip'}
           <input
@@ -58,15 +58,15 @@ export default function PracticeVideos({
 
       </section>
 
-      <section className="min-w-0 rounded-2xl border border-[#e4d8c7] bg-[#fffcf7] p-5">
+      <section className="min-w-0 rounded-xl border border-border bg-card shadow-card p-5">
         <div className="mb-4 flex items-baseline gap-3">
-          <span className="text-sm font-semibold text-[#a27b51]">02</span>
+          <span className="text-sm font-semibold text-muted-foreground">02</span>
           <h2 className="text-lg font-semibold">Your turn</h2>
         </div>
 
         {recording && (
           <div className="mb-5">
-            <p className="mb-2 truncate text-xs text-[#756354]">
+            <p className="mb-2 truncate text-xs text-muted-foreground">
               Saved attempt: {recording.name}
             </p>
             <VideoPreview file={recording} label="Your saved attempt" />
@@ -82,7 +82,7 @@ export default function PracticeVideos({
         )}
 
         <details className="mt-4">
-          <summary className="cursor-pointer text-xs text-[#756354]">Upload an attempt instead</summary>
+          <summary className="cursor-pointer text-xs text-muted-foreground">Upload an attempt instead</summary>
         <label className="mt-3 grid gap-2 text-sm">
           Video file
           <input
@@ -96,7 +96,7 @@ export default function PracticeVideos({
           />
         </label>
         </details>
-        <p className="mt-3 text-xs text-[#756354]">One word, up to five seconds. Keep your mouth visible.</p>
+        <p className="mt-3 text-xs text-muted-foreground">One word, up to five seconds. Keep your mouth visible.</p>
       </section>
     </div>
   )
