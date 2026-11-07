@@ -87,3 +87,19 @@
   body { @apply bg-background text-foreground font-sans; }
   h1, h2, h3, h4 { @apply font-heading; }
 }
+
+/* Equal-width copies make the greeting loop seamless; interaction never pauses it. */
+@keyframes greeting-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.greeting-track {
+  animation: greeting-scroll 45s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .greeting-track { animation: none; width: 100%; }
+  .greeting-group { flex-wrap: wrap; justify-content: center; width: 100%; padding: 0 1rem; }
+  .greeting-group[aria-hidden="true"] { display: none; }
+}
