@@ -16,18 +16,19 @@ Done:
 - if anything other than q or enter is pressed when "Record another word? Press Enter to continue, or type q and Enter to quit:" is prompted it glitches. fix that
 - Integrated tailwind into the project instead of plain css
 - made a base UI for demo
-
-
-Next:
 - Once Aron trains the model and pushes his code to GitHub, merge his branch
   into zxahamza20 and integrate the model with the existing pipeline.
-- Modularize the pronunciation code into subfolders after the integration;
-  update imports, model paths, and run commands together.
-- light mode/dark mode
-- fix the android emulator not working
-- actually implement the figma/layout/reqs the mentors have for the Frontend
-  - including color, sub components etc
+- update imports, model paths, and run commands together.
+- added color theme
 - write an automation code to convert mp4 to h.264 automatically 
+
+Frontend:
+- responsive design
+
+Next:
+
+- Modularize the pronunciation code into subfolders after the integration;
+- actually implement the figma/layout/reqs the mentors have for the Frontend
 
 For Frontend:
 - sidebar has learn (homepage), pronounciation, ASL, handwriting, profile, settings
@@ -37,6 +38,7 @@ For Frontend:
   -
 - lesson page:
   -
+ 
 
 
 ==================================================================================================================================================
