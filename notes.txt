@@ -1,26 +1,6 @@
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
---------------------------------------------------------------------- What I need to do now:------------------------------------------------------------------------
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-python3 -m venv .venv
-To run the whole thing: source .venv/bin/activate
-
-if wanna pull from a different branch when starting the session
-git fetch origin
-git status
-
-git push origin HEAD
-git fetch origin
-git switch feats/pronounciation-data-pipeline
-git pull origin feats/pronounciation-data-pipeline
-
-
-To run the file:
-python -m pronounciation.test_webcam
-
-To run the API server for testing:
-python -m uvicorn pronounciation.api:app       
-http://127.0.0.1:8000/docs#/default/comparison_comparisons_post
-
+==================================================================================================================================================
+                                                                        1. What to do next
+==================================================================================================================================================
 
 Done:
 - Track and display the mouth crop, lip points, bounding box, aperture, stretch, and aspect ratio. Return 40 XYZ lip landmarks per frame as a float32 (40, 3) array, with x/y normalized to the full frame and z scaled by the face-to-frame width ratio.
@@ -34,27 +14,371 @@ Done:
 - Incorporate audio to distinguish sounds such as b and p, using Whisper for transcription.
 - incremental plotting for the tests
 - if anything other than q or enter is pressed when "Record another word? Press Enter to continue, or type q and Enter to quit:" is prompted it glitches. fix that
+- Integrated tailwind into the project instead of plain css
+- made a base UI for demo
+
 
 Next:
-  - once Aron trains the model and pushes his code to gihub, merge his branch to mine
-    - modularize the code (make sub folders and shi)
-      
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
----------------------------------------------------------------- PRONOUNCIATION — CODE AND RUN NOTES ---------------------------------------------------------------
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+- Once Aron trains the model and pushes his code to GitHub, merge his branch
+  into zxahamza20 and integrate the model with the existing pipeline.
+- Modularize the pronunciation code into subfolders after the integration;
+  update imports, model paths, and run commands together.
+- light mode/dark mode
+- fix the android emulator not working
+- actually implement the figma/layout/reqs the mentors have for the Frontend
+  - including color, sub components etc
+- write an automation code to convert mp4 to h.264 automatically 
 
-For file explanations, workflow details, data formats, and limitations, see:
-  pronounciation/file and roles.txt
+For Frontend:
+- sidebar has learn (homepage), pronounciation, ASL, handwriting, profile, settings
+- responsive design
+- dark mode, light mode
+- for home page:
+  -
+- lesson page:
+  -
 
-Use the run instructions below from the nabu repository root. The package folder
-is spelled pronounciation.
 
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
---------------------------------------------- HOW to run according to gemini on the medical collection thingy ------------------------------------------------------
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+==================================================================================================================================================
+                                                                        2. File struct
+==================================================================================================================================================
 
-PRONOUNCIATION RUN GUIDE — RECORDING, REVIEW, AND COMPARISON
+Pipeline overview
+-----------------
+Browser camera/upload -> React practice page -> API client -> FastAPI upload
+-> FFmpeg MP4 conversion -> saved UUID video.
+  Transcription: video -> 16 kHz mono WAV -> Whisper -> heard text / match.
+  Comparison: user + example video -> face/lip detection -> idle trimming
+  -> normalized mouth features -> dynamic time warping -> error / feedback
+  -> PNG plot + JSON -> React results.
 
+Desktop collection: webcam + microphone -> landmarks + timestamps -> idle
+trimming -> labeled dataset.csv + matching WAV/MP4 -> review tools.
+Training preparation: existing raw NPZ or Hugging Face video -> normalized
+landmarks -> optional 29-frame single-word sequences -> CSV export.
+Handwriting is a separate API/test frontend; it is not wired into the current
+React pronunciation page.
+
+Repository root
+---------------
+README.md: Project overview and generic Docker instructions.
+requirements.txt: Python dependencies for pronunciation and handwriting.
+notes.txt: Next tasks, file roles, setup, and execution commands.
+docker-compose.yml: Starter Alpine container that stays running; it does not
+  start the Python APIs or React app.
+.gitignore: Excludes local/generated files from Git.
+
+UI/ — React + TypeScript browser app
+-----------------------------------
+package.json: Frontend dependencies and dev/build/lint/preview scripts.
+package-lock.json: Locks npm dependency versions for reproducible installs.
+index.html: HTML entry point containing the React mount element.
+src/main.tsx: Mounts React and loads global styling.
+src/App.tsx: Renders PronunciationPractice as the main page.
+src/components/pronounciation_practice.tsx: Manages the expected phrase,
+  example/user files, previews, upload IDs, requests, progress/errors, and
+  transcription/comparison results.
+src/components/VideoRecorder.tsx: Requests camera/microphone permission,
+  previews the stream, records MP4/WebM with MediaRecorder, returns a File,
+  and stops media tracks when finished or unmounted.
+src/api/pronounciation.ts: Typed fetch helpers for upload, transcription,
+  comparison, and media URLs; uses VITE_API_BASE_URL when supplied.
+src/index.css: Imports Tailwind; component styling uses utility classes in JSX.
+index.html body classes: Global background, font, text color, and smoothing.
+vite.config.ts: React plugin and development proxies for /recordings,
+  /comparisons, and /media to http://127.0.0.1:8000.
+.env.production: Production environment configuration; check the API address
+  before building for deployment.
+tsconfig.json: Coordinates TypeScript project configurations.
+tsconfig.app.json: TypeScript settings for browser application code.
+tsconfig.node.json: TypeScript settings for build/tool configuration.
+eslint.config.js: JavaScript/TypeScript lint rules.
+capacitor.config.ts: Native app identity and built web asset configuration.
+android/: Capacitor Android project, including camera/microphone permissions.
+ios/: Capacitor iOS project, including camera/microphone permission text.
+README.md: Vite template documentation.
+
+pronounciation/ — collection, analysis, and API
+---------------------------------------------
+__init__.py: Marks the directory as a Python package.
+config.py: Shared lip landmark indices, crop padding, and local model paths.
+detector.py: MouthTracker detects a face, estimates face landmarks, extracts
+  40 lip XYZ points in full-frame coordinates, and produces mouth crops/metrics.
+metrics.py: Calculates mouth aperture/stretch/aspect metrics and crop bounds.
+trim.py: Estimates mouth activity and trims idle landmark frames.
+video_input.py: Reads videos into timestamped landmark sequences; FFmpeg
+  converts input audio to 16 kHz mono 16-bit WAV for Whisper.
+transcribe.py: Lazily loads Whisper small.en on CPU; returns word timing and
+  confidence, then checks recognized text against the expected label.
+compare.py: Normalizes mouth geometry, extracts features, aligns sequences
+  with dynamic time warping, generates stage feedback and plots; also a CLI.
+api.py: FastAPI upload/transcription/comparison endpoints, UUID storage,
+  FFmpeg conversion, CORS configuration, processing lock, and /media serving.
+test_webcam.py: Interactive desktop collection entry point; coordinates
+  tracking, audio/video recording, labeling, trimming, saving, and audio checks.
+recorder.py: Appends labeled landmark frames and timestamps to dataset.csv;
+  allocates integer recording IDs.
+audio_record.py: Captures microphone audio and writes PCM WAV recordings.
+video_record.py: Captures video frames and uses FFmpeg to attach saved audio.
+check_confidence.py: Looks up saved integer recording IDs and checks their
+  audio transcription against the dataset label.
+view_trim.py: Loads CSV recordings and plots activity/trim boundaries.
+test_dataset_video.py: Extracts mouth crops from a prerecorded test clip.
+preprocess_recordings.py: Loads existing raw NPZ recordings, centers/scales
+  mouth points, and resamples eligible single-word sequences to 29 frames.
+export_csv.py: Exports raw NPZ recordings to CSV; inspect path constants first.
+export_normalized_csv.py: Exports normalized 29-frame NPZ sequences to CSV;
+  inspect path constants first.
+huggingFaceTest.py: Reads Hugging Face dataset metadata for inspection.
+test_hug_landmarks.py: Downloads a sample clip/model as configured and previews
+  landmark detection; its MODEL default is a Windows-specific path.
+preprocess_hug_landmarks.py: Downloads dataset clips, detects/normalizes lip
+  landmarks, and writes processed NPZ files; supports limits and preview.
+models/face_landmarker.task: MediaPipe face landmark model asset.
+models/blaze_face_full_range.tflite: MediaPipe face detection model asset.
+test_data/dataset.csv: Desktop collection's labeled frame data.
+test_data/audio/: Saved microphone WAVs and temporary prepared audio.
+test_data/video/: Saved desktop/reference videos.
+test_data/api/: Uploaded UUID MP4s, extracted WAVs, and API plots/ subfolder.
+test_data/recordings/: Raw NPZ inputs used by the older preprocessing workflow.
+test_data/plots/ and test_data/comparisons/: CLI comparison images.
+test_videos/: Prerecorded clips for crop diagnostics.
+crops/: Mouth images produced by crop diagnostics.
+file and roles.txt: More detailed pronunciation schemas and implementation notes.
+
+handwriting/ocr/ — separate handwriting pipeline
+-----------------------------------------------
+api.py: FastAPI image-upload endpoints for OCR text, scored tuples, and
+  handwriting error locations; serves its frontend at /tester.
+ocrfuncs.py: Caches PaddleOCR models by language, extracts text/results, and
+  restores signal handlers used by the API server.
+errorfinder.py: Converts SVG/image ink and expected rendered text into points,
+  normalizes geometry, uses nearest-neighbor distances to find errors, and
+  filters/combines error locations for feedback.
+fonts/: Bundled fonts for rendering expected text across supported scripts.
+frontend/index.html: Browser tester for the handwriting API.
+testocr.py: Manual OCR diagnostic script.
+testerrorfinder.py: Manual error-finder diagnostic script.
+testch.svg: SVG sample for handwriting diagnostics.
+planning.md: Handwriting design ideas and planned work.
+
+==================================================================================================================================================
+                                                                  3. Setup + steps to run
+==================================================================================================================================================
+
+Run pronunciation commands from the nabu repository root. The package name
+is spelled pronounciation. Handwriting commands below use --app-dir because
+that API currently uses sibling imports.
+
+External dependencies — not installed by requirements.txt
+--------------------------------------------------------
+Python requirements install Python packages only. Run the following setup
+commands separately; do not put shell commands in requirements.txt.
+
+macOS prerequisites (Homebrew must already be installed):
+- Python 3 with venv/pip, Git, Node.js/npm, and FFmpeg on PATH.
+- Use Node.js 22.12+ in the 22.x line, or a newer supported LTS release.
+  The installed Vite requires ^20.19.0 or >=22.12.0; Capacitor CLI requires
+  >=22.0.0, so Node 20 does not cover the entire project's tooling.
+- Install any missing tools, rather than reinstalling tools you already have:
+    brew install python git node ffmpeg
+- Verify your terminal can find them:
+    python3 --version
+    git --version
+    node --version
+    npm --version
+    ffmpeg -version
+  FFmpeg must include libx264 encoding for API uploads:
+    ffmpeg -encoders
+  Look for libx264 in the encoder list.
+
+Python environment (from the repository root):
+  python3 -m venv .venv
+  source .venv/bin/activate
+  python -m pip install --upgrade pip
+  python -m pip install -r requirements.txt
+  python -m pip check
+Select .venv/bin/python as the VS Code Python interpreter. Python package
+compatibility depends on Python version and platform; the full pinned file
+has not yet been validated with a clean install.
+
+Frontend dependencies, including Tailwind and its Vite plugin:
+  cd UI
+  npm ci
+  cd ..
+These come from UI/package.json and package-lock.json, not requirements.txt.
+Tailwind is already configured; no extra global Tailwind installation is needed.
+
+Model assets and first-use downloads:
+- Keep these files at the paths expected by config.py:
+    pronounciation/models/face_landmarker.task
+    pronounciation/models/blaze_face_full_range.tflite
+  They are local assets, not pip packages; restore them from your project/model
+  source if missing. Run the pronunciation backend from the repository root.
+- Whisper downloads small.en on first use if it is not cached.
+- PaddleOCR downloads requested language models when needed.
+- Optional Hugging Face scripts download metadata/videos and need network access.
+- Keep handwriting/ocr/fonts/ available for expected-text rendering.
+
+Camera, microphone, and desktop audio:
+- Allow camera/microphone access in macOS Privacy & Security for the browser
+  and terminal/IDE used for recording.
+- Browser recording needs localhost or HTTPS and MediaRecorder support.
+- Desktop OpenCV previews need a graphical desktop; headless environments
+  cannot display these windows.
+- sounddevice uses PortAudio. Its normal pip installation bundles PortAudio
+  on macOS/Windows, so a separate install is usually unnecessary.
+  If macOS reports a missing PortAudio library, install it with:
+    brew install portaudio
+  Linux may need its distribution's PortAudio runtime package separately.
+  Check microphone devices inside the activated environment:
+    python -m sounddevice
+  Reference: https://python-sounddevice.readthedocs.io/en/latest/installation.html
+
+Optional native builds (not required for browser development):
+- Android: Android Studio, Android SDK, and a compatible JDK for the native
+  Gradle project. After npm run build in UI, use npx cap sync android and
+  npx cap open android.
+- iOS: macOS with Xcode and its command-line tools. After npm run build in UI,
+  use npx cap sync ios and npx cap open ios.
+- Docker Desktop is needed only for Docker commands. The current compose
+  file starts a placeholder container; it does not run this application.
+
+Update the working branch
+-------------------------
+Check for local work before switching/pulling; commit or stash it if needed:
+  git status
+  git fetch origin
+  git switch zxahamza20
+  git pull --ff-only origin zxahamza20
+
+Neural mouth model — checkpoint setup
+------------------------------------
+The React analysis workspace displays the neural result already returned by
+POST /comparisons. No extra frontend request is needed. The model runs in Python.
+
+Inside the activated environment:
+  python -m pip install -r requirements.txt
+
+Obtain the trained .pt checkpoint from the model author. The API requires
+training_mode="multivsr-finetune", input_shape=(29, 40, 3), and compatible
+MouthEncoder weights. The baseline mouth_training.py checkpoints use different
+training_mode values and are not accepted by this API as currently written.
+
+Before starting the backend, replace this placeholder with the actual path:
+  export NABU_MOUTH_CHECKPOINT="/absolute/path/to/trained_model.pt"
+  python -m uvicorn pronounciation.api:app --reload --port 8000
+
+Check model loading directly at:
+  http://127.0.0.1:8000/models/mouth
+A 503 response means the checkpoint cannot be found or loaded; inspect detail.
+The default checkpoint path in api.py is Windows-specific, so set the environment
+variable on macOS. Restart the server after changing the checkpoint.
+
+Use one isolated word per clip, at most five seconds long, with a detectable
+mouth at every sampled frame. The analysis workspace shows cosine similarity,
+checkpoint, and embedding dimensions, or the backend's unavailability reason.
+Similarity is experimental and uncalibrated; it is not a pronunciation score
+or percentage. Existing geometric comparison remains available when the neural
+model cannot run. End-to-end inference still needs the compatible checkpoint.
+
+Reusable speaking activities — all workflows
+-------------------------------------------
+Use UI/src/components/speaking/SpeakingActivity.tsx for any exercise that needs
+spoken input. Full integration examples and props are in that folder's README.md.
+The practice page now demonstrates visible-reference video, hidden-reference video,
+microphone-only expected-word practice, and free-response audio.
+
+Backend: pronounciation/speaking.py provides POST /speaking/recordings,
+POST /speaking/review, and GET /speaking/exercises/{exercise_id}. It reuses the
+existing pronunciation analysis, model, and processing lock. Reference selection
+happens on the server; hiding a reference does not disable analysis.
+
+Set expectedText for standalone word/sentence practice; omit it for free speech.
+For lesson-owned answers, use exerciseId, e.g. "say-june". The server registry's
+answer overrides browser-provided text. Add real lesson IDs to EXERCISES or replace
+that registry with a lesson DB. Parent workflows receive onComplete(result) and
+own progress persistence/continuation decisions. No grading threshold is invented.
+
+Audio-only mode never requests video permission. Sentence and free-response tasks
+skip the single-word mouth model. Free responses return match=null, not a verdict.
+Failures/skipped checks are explicit; successful results are preserved. Reference
+video, direct uploads, previous-attempt replay, and diagnostic output are optional.
+Restart Vite and the backend after this update to enable the /speaking routes.
+
+Learner practice workflow
+-------------------------
+1) Start the pronunciation API with NABU_MOUTH_CHECKPOINT set to the trained
+   checkpoint, then start Vite. Restart Vite after adding the /practice proxy.
+2) Choose a word. GET /practice lists installed demo references and loads its
+   video automatically; users do not need to upload the example.
+3) Watch the visual reference, enable camera/microphone, and record one word.
+   Browser capture stops automatically after about 4.5 seconds to leave a margin
+   under the neural backend's five-second limit. Uploading an attempt is optional.
+4) Review my attempt uploads the videos and calls POST /practice/review.
+   Speech and movement checks run independently, retaining partial results.
+   Feedback prioritizes recognized-word mismatches, then observed geometric
+   differences. Neural similarity stays diagnostic until thresholds are calibrated.
+5) Try again keeps the selected word/reference and makes the previous recording
+   replayable for this session. No account history or progress database is added.
+6) The expanded Analysis workspace retains raw results, plots, and model details.
+   Demo setup controls allow a custom word/reference.
+
+Reference assets: pronounciation/test_data/video/{bad,back,bail,june}_browser.mp4
+and Kent_browser.mp4. These local demo clips have no audio; the UI labels them as
+visual references. Copy the assets to any deployment; they are not npm packages.
+Only installed files appear in the library. Add audiovisual references before
+presenting the activity as a listening exercise.
+
+Web app — primary run path
+--------------------------
+First create/activate the Python environment and install dependencies using
+step 1 below. Install FFmpeg and check that both model files exist.
+
+Terminal 1, from the repository root:
+  source .venv/bin/activate
+  python -m uvicorn pronounciation.api:app --reload --port 8000
+
+Terminal 2, from the repository root (Node.js and npm required):
+  cd UI
+  npm ci
+  npm run dev
+
+Open the URL printed by Vite, usually http://localhost:5173.
+1) Enter the word/phrase.
+2) Upload a reference video for mouth-movement comparison.
+3) Enable the camera, allow camera/microphone permission, start/stop a capture;
+   or upload your own recording. Keep your mouth visible and include audio.
+4) Use the transcription or comparison action and inspect the results.
+   Transcription needs user audio; mouth comparison needs both videos.
+
+The Vite proxy connects the browser to the API on port 8000. Browser recording
+requires localhost or HTTPS and a browser supporting MediaRecorder.
+Whisper may download small.en on first transcription; allow time/network access.
+Stop each development server with Ctrl+C.
+
+Frontend checks / production build:
+  cd UI
+  npm run lint
+  npm run build
+  npm run preview
+
+For deployment, set VITE_API_BASE_URL to the reachable backend before building,
+and configure NABU_ALLOWED_ORIGINS on the backend for the frontend origin.
+Vite's development proxy is not included in the production build.
+
+Handwriting API + tester — optional, separate server
+----------------------------------------------------
+From the repository root with the Python environment activated:
+  python -m uvicorn api:app --app-dir handwriting/ocr --port 8001
+
+Open http://127.0.0.1:8001/tester/ for the handwritten-image tester,
+or http://127.0.0.1:8001/docs for endpoint documentation.
+PaddleOCR may download language models on first use. This API has custom
+shutdown handling; start without --reload initially.
+
+Desktop collection / CLI / data preparation
+-------------------------------------------
 1. SET UP THE ENVIRONMENT
 
 Create the virtual environment if it does not already exist:
