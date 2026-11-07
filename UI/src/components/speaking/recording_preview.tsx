@@ -11,7 +11,7 @@ function AudioPreview({ file }: { file: File }) {
     player.src = url
     return () => { player.removeAttribute('src'); player.load(); URL.revokeObjectURL(url) }
   }, [file])
-  return <audio ref={ref} controls className="w-full" aria-label="Your audio recording" />
+  return <audio ref={ref} controls className="w-full min-w-0 max-w-full" aria-label="Your audio recording" />
 }
 
 export default function RecordingPreview({ file, capture }: { file: File; capture: CaptureMode }) {

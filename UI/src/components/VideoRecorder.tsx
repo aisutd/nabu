@@ -166,7 +166,7 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
           </span>
         )}
       </div>
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         {!cameraReady ? (
           <button className="cursor-pointer rounded-xl border-0 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={disabled || opening} onClick={() => void openCamera()}>
             {opening ? 'Opening…' : capture === 'audio' ? 'Enable microphone' : 'Enable camera'}

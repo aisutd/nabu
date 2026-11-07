@@ -6,18 +6,18 @@ export default function SpeakingResults({ result, showAnalysis, onRetry }: {
   result: SpeakingResult; showAnalysis: boolean; onRetry: () => void
 }) {
   return (
-    <div className="mt-6 space-y-5">
-      <section className="rounded-xl bg-card p-5 shadow-card" aria-label="Your review">
+    <div className="mt-6 min-w-0 space-y-5 [overflow-wrap:anywhere]">
+      <section className="rounded-xl bg-card p-4 shadow-card sm:p-5" aria-label="Your review">
         <h2 className="text-xl font-semibold">{result.feedback.title}</h2>
         <ul className="mt-3 space-y-2 text-sm">
           {result.feedback.observations.map((text) => <li key={text}>{text}</li>)}
         </ul>
         <p className="mt-4 font-medium">{result.feedback.next_action}</p>
         {Object.entries(result.errors).map(([check, error]) => <p role="alert" key={check} className="mt-3 text-sm text-destructive">{error}</p>)}
-        <button type="button" onClick={onRetry} className="mt-4 rounded-lg bg-primary px-5 py-3 text-primary-foreground hover:bg-primary/90">Try again</button>
+        <button type="button" onClick={onRetry} className="mt-4 w-full rounded-lg bg-primary px-5 py-3 text-primary-foreground hover:bg-primary/90 sm:w-auto">Try again</button>
       </section>
       {showAnalysis && (
-        <details open className="rounded-xl border bg-secondary p-5">
+        <details open className="rounded-xl border bg-secondary p-4 sm:p-5">
           <summary className="cursor-pointer font-heading text-lg">Analysis workspace</summary>
           <dl className="mt-4 space-y-3 text-sm">
             {Object.entries(result.checks).map(([name, check]) => (
