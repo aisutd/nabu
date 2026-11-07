@@ -24,6 +24,7 @@ Done:
 
 Frontend:
 - responsive design
+- sidebar has learn (homepage), pronounciation, ASL, handwriting, profile, settings
 
 Next:
 
@@ -31,10 +32,8 @@ Next:
 - actually implement the figma/layout/reqs the mentors have for the Frontend
 
 For Frontend:
-- sidebar has learn (homepage), pronounciation, ASL, handwriting, profile, settings
-- responsive design
 - dark mode, light mode
-- for home page:
+- for home page:why does it say 
   -
 - lesson page:
   -
