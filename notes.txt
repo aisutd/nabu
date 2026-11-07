@@ -29,6 +29,15 @@ Next:
   - including color, sub components etc
 - write an automation code to convert mp4 to h.264 automatically 
 
+For Frontend:
+- sidebar has learn (homepage), pronounciation, ASL, handwriting, profile, settings
+- responsive design
+- dark mode, light mode
+- for home page:
+  -
+- lesson page:
+  -
+
 
 ==================================================================================================================================================
                                                                         2. File struct
