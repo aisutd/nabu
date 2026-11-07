@@ -26,7 +26,7 @@ print("\nTop 5 Angles:", angles3)
 
 #All Results
 results = errorfinder.findError(svg, expected)
-#Use the results to generate a threshold based on the sizes of the errors
+#Use the results to generate a threshold based on the dists of the errors
 threshold = errorfinder.generateThreshold(results[1])
 
 #The correct way to use combineAndTransform is to first cull the errors based on the threshold, then combine and transform the remaining points.

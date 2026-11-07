@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 import xml.etree.ElementTree as ET
 from svgpathtools import parse_path as parsePath
 from functools import lru_cache
@@ -6,6 +6,7 @@ import math
 import os
 import numpy as np
 import cv2
+import statistics
 from scipy.spatial import cKDTree
 
 #Both the handwriting and the expected text are reduced to a grid whose longest side is this many cells,
@@ -13,6 +14,7 @@ from scipy.spatial import cKDTree
 GRID_SIZE = 64
 #An image whose darkest and lightest pixels are closer than this is treated as blank
 MIN_CONTRAST = 64
+MIN_ERROR = 0.1
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
 
 #Picks a threshold that best separates ink from paper using Otsu's method (maximizes the variance between the two groups).
@@ -148,7 +150,8 @@ def extractSvgPoints(textSvg, segments=5):
 #Converts a raster image (png, jpg, ...) into a list of points where the image is dark (the ink), in the original image's pixel space.
 #Dark ink on a light background is expected. Pass threshold (0-255) to override the automatic ink/paper cutoff.
 def extractImagePoints(image, size=GRID_SIZE, threshold=None):
-    img = Image.open(image)
+    #Phone photos store pixels in the sensor's orientation plus an EXIF tag saying how to rotate them. Pillow ignores the tag, so apply it here
+    img = ImageOps.exif_transpose(Image.open(image))
 
     #Flatten transparency onto white so transparent backgrounds don't count as ink
     if img.mode in ('RGBA', 'LA', 'P'):
@@ -194,24 +197,13 @@ def extractTextPoints(text, size=GRID_SIZE):
 
 #Normalizes a list of points to the range [0, 1] and returns the normalized points along with the original bounding box.
 def normalize(data): 
-    #Handle the case where the data is empty
     if not data:
-        return [], (0, 0, 0, 0)
-
-    #Basic AABB calculation
-    minX = min(point[0] for point in data)
-    minY = min(point[1] for point in data)
-    maxX = max(point[0] for point in data)
-    maxY = max(point[1] for point in data)
-    width = maxX - minX
-    height = maxY - minY
-
-    #Handle divide by zero error smoothly
-    if width == 0 or height == 0:
-        return [(0, 0)] * len(data), (0, 0, 0, 0)
-
-    #Normalize the points to the range [0, 1] and return them along with the original bounding box
-    return [( (point[0] - minX) / width, (point[1] - minY) / height ) for point in data], (minX, minY, width, height)
+            return [], (0, 0, 1, 1)
+    xs, ys = [p[0] for p in data], [p[1] for p in data]
+    minX, maxX, minY, maxY = min(xs), max(xs), min(ys), max(ys)
+    side = max(maxX - minX, maxY - minY) or 1.0
+    originX, originY = (minX + maxX) / 2 - side / 2, (minY + maxY) / 2 - side / 2
+    return [((x - originX) / side, (y - originY) / side) for x, y in data], (originX, originY, side, side)
 
 #Sorts the error data based on the distances in descending order and returns the sorted points, distances, normalized size, and angles.
 def sortError(errorData):
@@ -236,7 +228,8 @@ def findAngle(point1, point2):
         angle += 2 * math.pi
     return angle
 
-#Warning, this is O(M*N) where M is the number of points in the text SVG and N is the number of points in the expected text.
+#Compares the handwriting against the expected text. Uses k-d trees for the nearest-point searches, so it scales as roughly (M + N) log(M + N)
+#where M is the number of handwriting points and N is the number of expected text points.
 def findError(textSvg, expected):
     #Extract and normalize the points from the text SVG and the expected text
     textPoints, normSize = normalize(extractPoints(textSvg))
@@ -255,11 +248,11 @@ def findError(textSvg, expected):
 
     #Renormalize points so that it accurately reflects where the error occurred in the original coordinate space
     for i in range(len(points)): 
-        points[i] = (points[i][0] * normSize[2] + normSize[0], points[i][1] * normSize[3] + normSize[1]) if points[i] else None
+        points[i] = (points[i][0] * normSize[2] + normSize[0], points[i][1] * normSize[3] + normSize[1]) 
 
-    #Ellipse to show problem can be rendered at center maxPoint with w=maxDist*normSize[2] and h=maxDist*normSize[3]
-    #You may use maxAngle to move the ellipse in the direction of the error if you want to make it more visually accurate, but it is not necessary.
-    #Returns None, 0, (0, 0, 0, 0), 0 if there is an error
+    #Each error can be rendered as an ellipse centered at points[i] with w=dists[i]*normSize[2] and h=dists[i]*normSize[3]
+    #You may use angles[i] to move the ellipse in the direction of the error if you want to make it more visually accurate, but it is not necessary.
+    #Returns [], [], normSize, [] if there is nothing to compare (blank image or unrenderable text)
     return points, dists, normSize, angles
 
 #Culls transformed points based on a size threshold, returning only the points and sizes that exceed the threshold.
@@ -326,13 +319,13 @@ def findErrorFromLeaderboard(textSvg, expected, N=5):
 #Transforms the error data into points and sizes based on the angles and normalized size, returning the transformed points and sizes.
 #This function is the least scientific of these functions, so feel free to modify it to your liking. It is designed to give a visual representation of the errors, but it may not be the most accurate representation of the errors.
 def transformPoints(errorData):
-    points, sizes, normSize, angles = errorData
+    points, dists, normSize, angles = errorData
     transformedPoints = []
     transformedSizes = []
     for i in range(len(points)):
-        newPoint = (points[i][0] + math.cos(angles[i]) * normSize[2] * sizes[i] / 4, points[i][1] + math.sin(angles[i]) * normSize[3] * sizes[i] / 4)
+        newPoint = (points[i][0] + math.cos(angles[i]) * normSize[2] * dists[i] / 4, points[i][1] + math.sin(angles[i]) * normSize[3] * dists[i] / 4)
         transformedPoints.append(newPoint)
-        newSize = sizes[i] * (normSize[2] + normSize[3]) / 2
+        newSize = dists[i] * (normSize[2] + normSize[3]) / 2
         transformedSizes.append(newSize)
     return transformedPoints, transformedSizes
 
@@ -375,12 +368,12 @@ def combineAndTransform(errorData):
     combinedPoints, combinedSizes = zip(*combinedData) if combinedData else ([], [])
     return combinedPoints, combinedSizes
 
-#Generates a threshold based on the sizes of the errors, using the median and median absolute deviation (MAD) to determine a robust threshold that is less sensitive to outliers.
+#Generates a threshold based on the dists of the errors, using the median and median absolute deviation (MAD) to determine a robust threshold that is less sensitive to outliers.
 #The threshold is calculated as: median + (MAD * mads), where mads is a multiplier that can be adjusted to control the sensitivity of the threshold. A higher mads value will result in a higher threshold, while a lower mads value will result in a lower threshold. The default value of mads is 3, which is a common choice for robust statistics.
-def generateThreshold(sizes, mads=3):
-    if not sizes:
-        return 0
-    medianSize = sorted(sizes)[len(sizes) // 2]
-    devs = [abs(size - medianSize) for size in sizes]
-    mad = sorted(devs)[len(devs) // 2]
-    return medianSize + mad * mads
+def generateThreshold(dists, mads=3, floor=MIN_ERROR):
+    if not dists:
+        return floor
+    median = statistics.median(dists)
+    devs = [abs(dist - median) for dist in dists]
+    mad = statistics.median(devs)
+    return max(median + mad * mads, floor)

@@ -71,9 +71,9 @@
     <!-- The character the handwriting is supposed to be -->
     <label>expected <input id="expected" value="A" size="4"></label>
     <!-- 0-1 (normalized) for the error endpoints, but px for cullPointsFromThreshold -->
-    <label>threshold <input id="threshold" type="number" step="0.01" value="0.1" style="width:6em"></label>
+    <!-- <label>threshold <input id="threshold" type="number" step="0.01" value="0.1" style="width:6em"></label> -->
     <!-- How many top results the leaderboard endpoints return -->
-    <label>N <input id="N" type="number" value="5" style="width:4em"></label>
+    <!-- <label>N <input id="N" type="number" value="5" style="width:4em"></label> -->
   </p>
 </fieldset>
 
@@ -93,6 +93,8 @@
     <canvas id="expectedCanvas" width="300" height="300"></canvas>
   </figure>
 </div>
+<!-- Filled in by canvas.js after findError runs: how many errors were circled, or that none were found -->
+<p id="errorExplanation"></p>
 <script type="text/javascript" src="./canvas.js"></script>
 
 <!-- Box 2: OCR endpoints. data-ep is a custom attribute holding each button's endpoint path; the script reads it to

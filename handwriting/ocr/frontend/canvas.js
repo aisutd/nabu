@@ -10,7 +10,8 @@ function drawCircles(context, points, sizes) {
   if (!Array.isArray(points) || !Array.isArray(sizes)) return;
 
   context.strokeStyle = "red";
-  context.lineWidth = 2;
+  //Scale the outline with the image so it stays visible when a large photo is shrunk to fit the page
+  context.lineWidth = Math.max(2, context.canvas.width / 150);
   for (let i = 0; i < Math.min(points.length, sizes.length); i++) {
     const [x, y] = points[i];
     const size = sizes[i];
@@ -49,11 +50,19 @@ function renderComparison() {
     const metrics = expectedContext.measureText(expectedCharacter);
     const glyphHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
     if (metrics.width > 0 && glyphHeight > 0) {
+      const [left, top, side] = bounds;                                   //bounds is now a square: width == height == side
+      const inkWidth = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
+      const scale = side / Math.max(inkWidth, glyphHeight);               //one scale for both axes, like the backend
+      //Center the scaled glyph inside the square
+      const offsetX = left + (side - inkWidth * scale) / 2;
+      const offsetY = top + (side - glyphHeight * scale) / 2;
       expectedContext.save();
-      expectedContext.translate(left, top);
-      expectedContext.scale(width / metrics.width, height / glyphHeight);
-      expectedContext.fillText(expectedCharacter, -metrics.actualBoundingBoxLeft, metrics.actualBoundingBoxAscent);
+      expectedContext.translate(offsetX, offsetY);
+      expectedContext.scale(scale, scale);
+      //x = actualBoundingBoxLeft puts the glyph's left edge at 0, and y = ascent puts its top edge at 0
+      expectedContext.fillText(expectedCharacter, metrics.actualBoundingBoxLeft, metrics.actualBoundingBoxAscent);
       expectedContext.restore();
+
     }
   } else if (expectedCharacter) {
     expectedContext.font = `${Math.max(16, Math.round(expectedCanvas.height * 0.7))}px Arial, sans-serif`;
@@ -66,6 +75,15 @@ function renderComparison() {
   if (errorData) {
     drawCircles(inputContext, errorData.points, errorData.sizes);
     drawCircles(expectedContext, errorData.points, errorData.sizes);
+  }
+
+  //Say what happened, since clean handwriting produces no circles and would otherwise look like nothing ran
+  const explanation = document.getElementById("errorExplanation");
+  if (explanation) {
+    const count = Array.isArray(errorData?.points) ? errorData.points.length : 0;
+    if (!errorData) explanation.textContent = "";
+    else if (count === 0) explanation.textContent = "No errors marked. No substantial outliers found between the expected and actual handwriting.";
+    else explanation.textContent = `${count} error${count === 1 ? "" : "s"} circled in red.`;
   }
 }
 
