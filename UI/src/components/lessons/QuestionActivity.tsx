@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { Question } from '../../data/lessons'
+import { canContinueQuestion } from '../../data/lesson_progress'
 import type { Attempt } from '../../data/lesson_progress'
 import type { SpeakingResult } from '../../api/speaking'
 import SpeakingActivity from '../speaking/SpeakingActivity'
@@ -22,7 +23,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
   const [attempt, setAttempt] = useState<Attempt | null>(previous ?? null)
   const [busy, setBusy] = useState(false)
   const checked = question.kind !== 'speaking' && attempt !== null && !attempt.skipped
-  const ready = question.kind === 'speaking' ? attempt?.speaking?.hasResult === true : attempt?.correct === true
+  const ready = canContinueQuestion(question, attempt)
 
   const reportBusy = useCallback((value: boolean) => {
     setBusy(value)
@@ -62,7 +63,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
           <p className="mb-5 text-muted-foreground">{question.prompt}</p>
           <SpeakingActivity exerciseId={question.exerciseId} capture="video" showReference={question.showReference}
             onComplete={speakingComplete} onAttemptReset={() => setAttempt(null)} onBusyChange={reportBusy} />
-          {previous?.speaking?.hasResult && !busy && attempt === previous && <p className="mt-4 text-sm text-muted-foreground">A reviewed attempt is saved for this question. Continue or record a new one.</p>}
+          {previous?.speaking?.hasResult && !busy && attempt === previous && <p className="mt-4 text-sm text-muted-foreground">{ready ? 'Your matching attempt is saved. Continue or record a new one.' : `Your last attempt did not confirm “${question.word}”. Record and review again.`}</p>}
         </>
       ) : (
         <section className="rounded-xl border bg-card p-5 shadow-card sm:p-8">
@@ -94,9 +95,15 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
         </section>
       )}
       <footer className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        {question.kind === 'speaking' ? <button type="button" disabled={busy} onClick={() => onSkip(makeAttempt([], '', null, true))} className="min-h-11 px-2 text-sm text-muted-foreground underline underline-offset-4 disabled:opacity-40">Skip this question</button> : <span className="text-xs text-muted-foreground">Take your time. Retries are welcome.</span>}
-        {ready ? <button type="button" disabled={busy} onClick={onAdvance} className={primary}>Continue →</button>
-          : question.kind === 'speaking' ? <span className="text-xs text-muted-foreground">Review an attempt to continue, or choose skip.</span>
+        {question.kind === 'speaking' ? (
+          <div>
+            <button type="button" disabled={busy} onClick={() => onSkip(makeAttempt([], '', null, true))} className="min-h-11 px-2 text-sm text-muted-foreground underline underline-offset-4 disabled:opacity-40">Skip this question</button>
+            {!ready && <p className="text-xs text-muted-foreground">The recognized word must match “{question.word}” to enable Continue.</p>}
+          </div>
+        ) : <span className="text-xs text-muted-foreground">Take your time. Retries are welcome.</span>}
+        {question.kind === 'speaking' ? <button type="button" disabled={busy || !ready} onClick={onAdvance} className={primary}>Continue →</button>
+          : ready ? <button type="button" disabled={busy} onClick={onAdvance} className={primary}>Continue →</button>
+
           : checked ? <button type="button" onClick={() => { setAttempt(null); setSelected([]) }} className={primary}>Try again</button>
           : <button type="button" onClick={checkAnswer} disabled={selected.length === 0 || (question.kind === 'sentence' && selected.length !== question.tokens.length)} className={primary}>Check answer</button>}
       </footer>

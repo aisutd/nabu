@@ -34,7 +34,7 @@ test('resume retains attempts and cursor while filtering invalid question IDs', 
   assert.equal(restored.attempts.length, 1)
 })
 test('completion is set only when the final question is advanced', () => {
-  let state = progress.emptyProgress()
+  let state = { ...progress.emptyProgress(), attempts: lesson.questions.map((question) => attempt(question.id)) }
   state = progress.advanceProgress(state, lesson)
   assert.equal(state.completed, false)
   state = progress.advanceProgress(progress.advanceProgress(state, lesson), lesson)
@@ -55,4 +55,28 @@ test('unit uses the existing backend exercise IDs for all speaking questions', (
       if (question.kind === 'sentence') assert.deepEqual([...question.order].sort(), plain(question.tokens.map((token) => token.id).sort()))
     }
   }
+})
+
+test('speaking requires a recognized match to the displayed word', () => {
+  const speakingLesson = data.lessons.find((item) => item.id === 'say-it-aloud')
+  const question = speakingLesson.questions[0]
+  const matching = attempt(question.id, { correct: null, speaking: { match: true, heard: ' BACK ', expected: 'back', hasResult: true } })
+  assert.equal(progress.canContinueQuestion(question, matching), true)
+  for (const speaking of [undefined, { ...matching.speaking, match: false }, { ...matching.speaking, heard: 'bad' }, { ...matching.speaking, heard: '' }, { ...matching.speaking, expected: 'bad' }, { match: null, hasResult: true }]) {
+    const failed = { ...matching, speaking }
+    assert.equal(progress.canContinueQuestion(question, failed), false)
+    const state = { cursor: 0, completed: false, attempts: [failed] }
+    assert.equal(progress.advanceProgress(state, speakingLesson).cursor, 0)
+  }
+  assert.equal(progress.canContinueQuestion(question, { ...matching, skipped: true }), false)
+  assert.equal(progress.advanceProgress({ cursor: 0, completed: false, attempts: [matching] }, speakingLesson).cursor, 1)
+})
+
+test('explicit speaking skip advances without enabling normal Continue', () => {
+  const lesson = data.lessons.find((item) => item.id === 'say-it-aloud')
+  const state = { cursor: 0, completed: false, attempts: [attempt(lesson.questions[0].id, { correct: null, skipped: true })] }
+  assert.equal(progress.advanceProgress(state, lesson).cursor, 0)
+  const skipped = progress.advanceProgress(state, lesson, true)
+  assert.equal(skipped.cursor, 1)
+  assert.equal(progress.lessonSummary(skipped, lesson).skipped, 1)
 })

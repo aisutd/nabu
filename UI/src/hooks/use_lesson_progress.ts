@@ -22,7 +22,7 @@ export default function useLessonProgress() {
     progress, storageError,
     record: (lesson: Lesson, attempt: Attempt) => update(lesson, (value) => ({ ...value, attempts: [...value.attempts, attempt] })),
     advance: (lesson: Lesson) => update(lesson, (value) => advanceProgress(value, lesson)),
-    skip: (lesson: Lesson, attempt: Attempt) => update(lesson, (value) => advanceProgress({ ...value, attempts: [...value.attempts, attempt] }, lesson)),
+    skip: (lesson: Lesson, attempt: Attempt) => update(lesson, (value) => advanceProgress({ ...value, attempts: [...value.attempts, attempt] }, lesson, true)),
     restart: (lesson: Lesson) => update(lesson, emptyProgress),
   }
 }

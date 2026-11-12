@@ -1,5 +1,5 @@
 import { lessons } from './lessons'
-import type { Lesson } from './lessons'
+import type { Lesson, Question } from './lessons'
 import type { SpeakingResult } from '../api/speaking'
 import type { NeuralResult } from '../api/pronounciation'
 
@@ -41,7 +41,22 @@ export function parseProgress(raw: string | null): ProgressMap {
   } catch { return {} }
 }
 
-export function advanceProgress(progress: LessonProgress, lesson: Lesson): LessonProgress {
+export function canContinueQuestion(question: Question, attempt?: Attempt | null): boolean {
+  if (!attempt || attempt.skipped || attempt.questionId !== question.id) return false
+  if (question.kind !== 'speaking') return attempt.correct === true
+  const speech = attempt.speaking
+  const expected = question.word.trim().toLowerCase()
+  return speech?.match === true &&
+    typeof speech.heard === 'string' && speech.heard.trim().toLowerCase() === expected &&
+    typeof speech.expected === 'string' && speech.expected.trim().toLowerCase() === expected
+}
+
+export function advanceProgress(progress: LessonProgress, lesson: Lesson, allowSkip = false): LessonProgress {
+  const question = lesson.questions[progress.cursor]
+  const latest = progress.attempts.filter((attempt) => attempt.questionId === question?.id).at(-1)
+  if (!question) return progress
+  const explicitlySkipped = allowSkip && question.kind === 'speaking' && latest?.skipped === true
+  if (!explicitlySkipped && !canContinueQuestion(question, latest)) return progress
   const cursor = Math.min(progress.cursor + 1, lesson.questions.length)
   return { ...progress, cursor, completed: cursor === lesson.questions.length }
 }
