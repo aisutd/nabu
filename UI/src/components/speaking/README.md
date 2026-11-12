@@ -53,6 +53,8 @@ Options:
   otherwise 30 seconds. Increasing it does not extend the neural model's limit.
 - `onComplete`: receives the structured result after review; it does not indicate
   pronunciation success. Failed/skipped checks are explicit in the result.
+- `onAttemptReset`: tells a parent lesson to clear its reviewed/continue state
+  when the learner retries or selects another recording.
 - `onBusyChange`: allows a parent to disable task changes during recording/review.
 
 Analysis capabilities:
