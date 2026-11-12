@@ -12,6 +12,7 @@ import SettingsPage from './pages/settings/SettingsPage'
 
 function currentPage(): PageId {
   const path = window.location.hash.slice(1)
+  if (path.startsWith('/lesson/')) return 'lesson'
   return sidebarItems.find((item) => item.href.slice(1) === path)?.id ?? 'home'
 }
 

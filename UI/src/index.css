@@ -103,3 +103,10 @@
   .greeting-group { flex-wrap: wrap; justify-content: center; width: 100%; padding: 0 1rem; }
   .greeting-group[aria-hidden="true"] { display: none; }
 }
+
+@layer components {
+  .lesson-progress { @apply appearance-none overflow-hidden rounded-full bg-accent; }
+  .lesson-progress::-webkit-progress-bar { @apply rounded-full bg-accent; }
+  .lesson-progress::-webkit-progress-value { @apply rounded-full bg-primary; }
+  .lesson-progress::-moz-progress-bar { @apply rounded-full bg-primary; }
+}

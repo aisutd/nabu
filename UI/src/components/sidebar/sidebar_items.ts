@@ -1,6 +1,6 @@
 export const sidebarItems = [
   { id: 'home', label: 'Learn', href: '#/home' },
-  { id: 'lesson', label: 'Lesson', href: '#/lesson' },
+  { id: 'lesson', label: 'Lessons', href: '#/lesson' },
   { id: 'asl', label: 'ASL', href: '#/asl' },
   { id: 'pronunciation', label: 'Pronunciation', href: '#/pronunciation' },
   { id: 'settings', label: 'Settings', href: '#/settings' },

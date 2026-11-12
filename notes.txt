@@ -283,6 +283,34 @@ Similarity is experimental and uncalibrated; it is not a pronunciation score
 or percentage. Existing geometric comparison remains available when the neural
 model cannot run. End-to-end inference still needs the compatible checkpoint.
 
+English lesson hub — Unit 1
+---------------------------
+Open #/lesson from the sidebar. Normal lessons work without the Python backend:
+- Meet the words: picture matching for bad, back, and June.
+- Find the meaning: contextual meanings for bail, Kent, and back.
+- Build a sentence: word tiles using the same vocabulary.
+- Say it aloud: backend-owned say-back, say-bad, and say-june exercises using
+  SpeakingActivity. The June question hides its reference. Existing references
+  are silent visual examples, not listening recordings.
+- Write it down and Sign it are coming-soon previews. They do not record input,
+  grade answers, or count as completed lessons.
+
+Lesson routes use #/lesson/{lesson-id}; the standalone pronunciation demo remains
+at #/pronunciation. Correct normal answers unlock Continue. Speaking reviews with
+at least one successful check allow continuation; total failures require a retry
+or explicit Skip. Neural similarity is not used as a pronunciation pass threshold.
+
+Progress, retries, recording IDs, recognized text, and speaking check metadata
+are saved in localStorage under nabu.english-lessons.v1. Raw audio/video remains
+on the backend, not in localStorage. Progress resumes in the same browser; no
+account sync is provided. Practice again replaces that lesson's current saved run.
+Malformed/obsolete saved data is ignored; storage failures show a visible notice.
+
+Files: UI/src/data/lessons.ts defines content, lesson_progress.ts handles persisted
+state, use_lesson_progress.ts handles storage, components/lessons/ renders the hub,
+activities, preview, and summary, and pages/lesson/LessonPage.tsx resolves routes.
+Check the frontend with npm run test:lessons, npm run lint, and npm run build in UI.
+
 Reusable speaking activities — all workflows
 -------------------------------------------
 Use UI/src/components/speaking/SpeakingActivity.tsx for any exercise that needs
