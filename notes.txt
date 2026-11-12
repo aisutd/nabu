@@ -25,9 +25,22 @@ Done:
 Frontend:
 - responsive design
 - sidebar has learn (homepage), pronounciation, ASL, handwriting, profile, settings
+- Added Lessons to the sidebar and replaced the lesson placeholder with an English Unit 1 learning hub.
+- Built the unit around the existing words: bad, back, bail, June, and Kent.
+- Added a learning path, vocabulary chips, lesson completion progress, and a Start/Continue lesson card.
+- Added picture-matching questions with illustrations, contextual multiple-choice word meanings, and sentence-building word tiles.
+- Connected the pronunciation lesson to the shared SpeakingActivity using say-back, say-bad, and say-june; the June question hides the reference.
+- Added clearly labeled handwriting and ASL coming-soon previews that cannot be graded or marked complete.
+- Added lesson-specific hash routes, question progress, answer checking, feedback, retries, and Continue controls.
+- Speaking questions allow continuation after at least one successful analysis result; total failures require a retry or an explicit skip. Neural similarity is not used as a passing score.
+- Added lesson summaries showing reviewed questions, attempts made, and skipped questions, plus Next lesson and Practice again actions.
+- Saved lesson progress and attempt metadata in browser localStorage for reload/resume; added validation for malformed saved data and a notice when storage is unavailable.
+- Kept raw recordings on the backend and preserved the standalone pronunciation practice lab for demonstrations.
+- Reset lesson continuation when a speaking attempt is replaced or retried; fixed selecting the same uploaded recording again after a retry.
+- Reused the shared cookie palette, Nunito/Fredoka fonts, card shading, and themed progress bars throughout the new lesson pages.
+- Verified build, lint, six lesson-progress tests, and desktop/mobile browser flows, including resume, retries, speaking failure/skip, and placeholders. Speaking browser tests used mocked backend responses.
 
 Next:
-
 - Modularize the pronunciation code into subfolders after the integration;
 - actually implement the figma/layout/reqs the mentors have for the Frontend
 
