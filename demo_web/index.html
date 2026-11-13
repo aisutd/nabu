@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nabu ASL Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind's in-browser build: no install or build step. Needs internet when the page loads. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
+  <style type="text/tailwindcss">
+    /* Nabu design tokens, as given by the team. */
+    :root {
+      --radius: 1rem;
+      --background: oklch(0.921 0.040 77.2);
+      --foreground: oklch(0.290 0.041 57.5);
+      --card: oklch(0.987 0.012 79.8);
+      --card-foreground: oklch(0.290 0.041 57.5);
+      --popover: oklch(0.987 0.012 79.8);
+      --popover-foreground: oklch(0.290 0.041 57.5);
+      --primary: oklch(0.603 0.183 28.8);
+      --primary-foreground: oklch(1 0 0);
+      --secondary: oklch(0.962 0.023 78.2);
+      --secondary-foreground: oklch(0.393 0.063 58.9);
+      --muted: oklch(0.962 0.023 78.2);
+      --muted-foreground: oklch(0.499 0.084 61.3);
+      --accent: oklch(0.858 0.068 76.3);
+      --accent-foreground: oklch(0.290 0.041 57.5);
+      --destructive: oklch(0.521 0.165 28.9);
+      --border: oklch(0.858 0.068 76.3);
+      --input: oklch(0.858 0.068 76.3);
+      --ring: oklch(0.499 0.084 61.3);
+      --success: oklch(0.659 0.133 133.9);
+      --info: oklch(0.596 0.153 262.7);
+      --warning: oklch(0.775 0.148 78.9);
+      --chart-1: oklch(0.603 0.183 28.8);
+      --chart-2: oklch(0.596 0.153 262.7);
+      --chart-3: oklch(0.775 0.148 78.9);
+      --chart-4: oklch(0.659 0.133 133.9);
+      --chart-5: oklch(0.601 0.098 64.0);
+    }
+
+    @theme inline {
+      --font-sans: "Nunito", system-ui, sans-serif;
+      --font-heading: "Fredoka", ui-rounded, system-ui, sans-serif;
+      --radius-sm: calc(var(--radius) - 4px);
+      --radius-md: calc(var(--radius) - 2px);
+      --radius-lg: var(--radius);
+      --radius-xl: calc(var(--radius) + 8px);
+      --color-background: var(--background);
+      --color-foreground: var(--foreground);
+      --color-card: var(--card);
+      --color-card-foreground: var(--card-foreground);
+      --color-primary: var(--primary);
+      --color-primary-foreground: var(--primary-foreground);
+      --color-secondary: var(--secondary);
+      --color-secondary-foreground: var(--secondary-foreground);
+      --color-muted: var(--muted);
+      --color-muted-foreground: var(--muted-foreground);
+      --color-accent: var(--accent);
+      --color-accent-foreground: var(--accent-foreground);
+      --color-destructive: var(--destructive);
+      --color-border: var(--border);
+      --color-ring: var(--ring);
+      --color-success: var(--success);
+      --color-info: var(--info);
+      --color-warning: var(--warning);
+      --color-chart-1: var(--chart-1);
+      --color-chart-2: var(--chart-2);
+      --color-chart-3: var(--chart-3);
+    }
+
+    @layer base {
+      * { @apply border-border outline-ring/50; }
+      body { @apply bg-background text-foreground font-sans; }
+      h1, h2, h3, h4 { @apply font-heading; }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="grid size-11 place-items-center rounded-lg bg-primary font-heading text-2xl text-primary-foreground">N</div>
+        <div>
+          <h1 class="text-3xl font-semibold leading-none">Nabu</h1>
+          <p class="text-sm text-muted-foreground">Live ASL recognition</p>
+        </div>
+      </div>
+      <span id="mode" class="rounded-full bg-muted px-4 py-1.5 text-sm font-bold text-muted-foreground">Connecting…</span>
+    </header>
+
+    <main class="grid gap-6 lg:grid-cols-[3fr_2fr]">
+      <section class="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div class="relative aspect-video bg-foreground/90">
+          <img id="camera" src="/stream" alt="Live camera with the detected hand marked" class="size-full object-cover">
+          <p id="error" class="absolute inset-x-4 bottom-4 hidden rounded-md bg-destructive px-4 py-2 text-sm font-bold text-primary-foreground"></p>
+        </div>
+        <div class="flex items-center justify-between gap-4 px-5 py-3 text-sm text-muted-foreground">
+          <span>Hold still for a letter. Move to sign a word.</span>
+          <span id="speed" class="tabular-nums">speed 0.00</span>
+        </div>
+      </section>
+
+      <div class="flex flex-col gap-6">
+        <section class="rounded-xl border bg-card p-5 shadow-sm">
+          <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Transcript</h2>
+          <p id="text" class="min-h-20 break-words font-heading text-4xl font-semibold"></p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button data-command="space" class="rounded-md bg-secondary px-4 py-2 font-bold text-secondary-foreground hover:bg-accent">Space</button>
+            <button data-command="backspace" class="rounded-md bg-secondary px-4 py-2 font-bold text-secondary-foreground hover:bg-accent">Delete</button>
+            <button data-command="clear" class="rounded-md bg-primary px-4 py-2 font-bold text-primary-foreground hover:opacity-90">Clear</button>
+          </div>
+        </section>
+
+        <section class="rounded-xl border bg-card p-5 shadow-sm">
+          <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Right now</h2>
+          <div class="flex items-center gap-5">
+            <div id="letter" class="grid size-24 shrink-0 place-items-center rounded-xl bg-accent font-heading text-6xl font-semibold text-accent-foreground">·</div>
+            <ol id="guesses" class="flex-1 space-y-2 text-sm"></ol>
+          </div>
+        </section>
+
+        <section class="rounded-xl border bg-card p-5 shadow-sm">
+          <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Last sign</h2>
+          <p id="sign" class="font-heading text-2xl font-semibold">—</p>
+          <div class="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+            <div id="sign-bar" class="h-full w-0 rounded-full bg-info transition-all"></div>
+          </div>
+          <p id="sign-note" class="mt-2 text-sm text-muted-foreground"></p>
+        </section>
+      </div>
+    </main>
+
+    <footer class="mt-6 text-center text-sm text-muted-foreground">
+      Prototype, trained mostly on one signer. Letters A–Y except J and Z.
+      Signs: hello, thank you, yes, no, happy, birthday.
+    </footer>
+  </div>
+
+  <script>
+    const MODES = {
+      letter: ["Reading letter", "bg-success text-primary-foreground"],
+      moving: ["Moving — reading sign", "bg-info text-primary-foreground"],
+      no_hand: ["No hand", "bg-muted text-muted-foreground"],
+    };
+    const GUESS_COLORS = ["bg-chart-1", "bg-chart-2", "bg-chart-3"];
+    const MIN_CONFIDENCE = 0.6;
+    const $ = (id) => document.getElementById(id);
+
+    function percent(chance) {
+      return `${Math.round(chance * 100)}%`;
+    }
+
+    function showGuesses(guesses) {
+      $("guesses").replaceChildren(...guesses.map((guess, index) => {
+        const row = document.createElement("li");
+        row.className = "flex items-center gap-2";
+        row.innerHTML = `<span class="w-5 font-bold"></span>
+          <span class="h-2 flex-1 overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full ${GUESS_COLORS[index]}"></span></span>
+          <span class="w-10 text-right tabular-nums text-muted-foreground"></span>`;
+        row.children[0].textContent = guess.label;
+        row.children[1].firstElementChild.style.width = percent(guess.chance);
+        row.children[2].textContent = percent(guess.chance);
+        return row;
+      }));
+    }
+
+    function showSign(state) {
+      if (!state.signs_enabled) {
+        $("sign-note").textContent = "Sign model not trained yet — letters only.";
+        return;
+      }
+      const sign = state.last_sign;
+      $("sign").textContent = sign ? sign.label : "—";
+      $("sign-bar").style.width = sign ? percent(sign.chance) : "0";
+      if (!sign) {
+        $("sign-note").textContent = "";
+      } else if (sign.label === "NO SIGN") {
+        $("sign-note").textContent = "Not a word, so nothing was added.";
+      } else if (sign.chance < MIN_CONFIDENCE) {
+        $("sign-note").textContent = `Only ${percent(sign.chance)} sure, so nothing was added.`;
+      } else {
+        $("sign-note").textContent = `${percent(sign.chance)} sure.`;
+      }
+    }
+
+    function render(state) {
+      const [label, colors] = MODES[state.mode] || MODES.no_hand;
+      $("mode").textContent = label;
+      $("mode").className = `rounded-full px-4 py-1.5 text-sm font-bold ${colors}`;
+      $("text").textContent = state.text || "";
+      $("letter").textContent = state.letter || "·";
+      $("speed").textContent = `speed ${(state.speed ?? 0).toFixed(2)}`;
+      $("error").textContent = state.error || "";
+      $("error").classList.toggle("hidden", !state.error);
+      showGuesses(state.guesses || []);
+      showSign(state);
+    }
+
+    async function poll() {
+      try {
+        const response = await fetch("/state", { cache: "no-store" });
+        render(await response.json());
+      } catch {
+        $("mode").textContent = "Server stopped";
+      }
+      setTimeout(poll, 120);
+    }
+
+    document.querySelectorAll("[data-command]").forEach((button) => {
+      button.addEventListener("click", () => fetch(`/text/${button.dataset.command}`, { method: "POST" }));
+    });
+    poll();
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+[tool.ruff]
+line-length = 100
+extend-exclude = ["SignAlphaSet"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "SIM", "UP", "C90", "PLR2004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.per-file-ignores]
+# Expected values in tests are clearer written out than named.
+"tests/*" = ["PLR2004"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Lets tests import asl_core from the repo root.
+pythonpath = [".", "tests"]

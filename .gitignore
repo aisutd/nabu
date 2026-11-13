@@ -33,3 +33,10 @@ pronunciation/models/
 # Local pronunciation test data
 pronounciation/test_data/
 pronunciation/test_data/
+
+# ASL recognition: local environments, datasets and model files
+venv/
+*.task
+*.p
+*.npz
+SignAlphaSet/
