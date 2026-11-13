@@ -95,3 +95,5 @@ svgpathtools
 scipy
 # Neural mouth encoder inference and training.
 torch
+# ASL letter and sign classifiers.
+scikit-learn==1.9.1
