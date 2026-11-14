@@ -2,7 +2,7 @@
 
 Runs only on this computer (localhost). Frames stay in memory and are never saved.
 
-Usage: venv/Scripts/python 8_demo_server.py
+Usage (from the asl folder): ../venv/Scripts/python 8_demo_server.py
 Then open http://localhost:8000 in a browser.
 """
 

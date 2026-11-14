@@ -2,7 +2,7 @@
 
 This compares training mixes and doesn't change the saved model.
 
-Usage: venv/Scripts/python 5_evaluate_on_session.py
+Usage (from the asl folder): ../venv/Scripts/python 5_evaluate_on_session.py
 """
 
 from pathlib import Path

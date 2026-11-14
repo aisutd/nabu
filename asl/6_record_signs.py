@@ -2,7 +2,7 @@
 
 Saves hand landmark numbers only, never video frames. Rerunning a session skips finished signs.
 
-Usage: venv/Scripts/python 6_record_signs.py 1
+Usage (from the asl folder): ../venv/Scripts/python 6_record_signs.py 1
 """
 
 import argparse

@@ -2,7 +2,7 @@
 
 Saves landmark numbers only, never video frames. Rerunning a session skips finished letters.
 
-Usage: venv/Scripts/python 4_record_landmarks.py 1
+Usage (from the asl folder): ../venv/Scripts/python 4_record_landmarks.py 1
 """
 
 import argparse
