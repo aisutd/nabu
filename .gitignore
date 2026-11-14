@@ -40,3 +40,7 @@ venv/
 *.p
 *.npz
 SignAlphaSet/
+# Share the trained ASL models with the team (overrides the *.p / *.task rules above).
+!asl/asl_static_model.p
+!asl/asl_sign_model.p
+!asl/hand_landmarker.task
