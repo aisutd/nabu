@@ -1,0 +1,144 @@
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@600;700;800;900&family=Caveat:wght@500;600&display=swap");
+@import "tailwindcss";
+
+:root {
+  --background: #f2e8da;
+  --foreground: #3b2b20;
+  --accent: #cf5145;
+}
+
+@theme inline {
+  --font-sans: "Nunito", system-ui, sans-serif;
+  --font-heading: "Fredoka", ui-rounded, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+@layer base {
+  html {
+    background: var(--background);
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100dvh;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: "Nunito", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--accent), transparent 45%);
+    outline-offset: 3px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+  }
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar-link,
+.sidebar-link-active {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 900;
+  text-align: left;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.sidebar-link {
+  color: #765e4b;
+}
+
+.sidebar-link:hover {
+  background: #f6eee4;
+  color: #3b2b20;
+}
+
+.sidebar-link-active {
+  background: #f6d5c7;
+  color: #cf5145;
+}
+
+/* ---------- Handwriting page ---------- */
+.canvas-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      transparent calc(50% - 0.5px),
+      rgba(126, 151, 141, 0.33) 50%,
+      transparent calc(50% + 0.5px)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 0.5px),
+      rgba(126, 151, 141, 0.33) 50%,
+      transparent calc(50% + 0.5px)
+    );
+}
+
+.reference-glyph {
+  position: relative;
+  z-index: 1;
+  font-family: "Caveat", cursive;
+  font-size: clamp(9rem, 22vw, 15rem);
+  font-weight: 600;
+  line-height: 1;
+  color: #242923;
+  transform: translateY(-4%);
+}
+
+.error-point {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 2px solid #b9574e;
+  border-radius: 999px;
+  background: rgba(255, 245, 244, 0.88);
+  color: #a2443d;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 0 0 4px rgba(185, 87, 78, 0.1);
+}
+
+.reference-mark {
+  position: absolute;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border: 2px dashed #b9574e;
+  border-radius: 999px;
+  background: rgba(185, 87, 78, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
