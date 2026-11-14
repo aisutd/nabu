@@ -1,6 +1,6 @@
 """Score the letter model on an unseen session, then train and save the final model.
 
-Usage: venv/Scripts/python 2_train_model.py
+Usage (from the asl folder): ../venv/Scripts/python 2_train_model.py
 """
 
 import pickle

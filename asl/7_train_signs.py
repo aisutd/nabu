@@ -3,7 +3,7 @@
 Each recorded clip is cut with the same MotionSegmenter the live app uses, so the model
 trains on exactly the kind of movement it will see live.
 
-Usage: venv/Scripts/python 7_train_signs.py
+Usage (from the asl folder): ../venv/Scripts/python 7_train_signs.py
 """
 
 import pickle

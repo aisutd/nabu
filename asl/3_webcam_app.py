@@ -1,6 +1,6 @@
 """Recognize static ASL letters live from the webcam.
 
-Usage: venv/Scripts/python 3_webcam_app.py
+Usage (from the asl folder): ../venv/Scripts/python 3_webcam_app.py
 """
 
 import pickle
