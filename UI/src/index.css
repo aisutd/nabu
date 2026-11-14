@@ -110,3 +110,229 @@
   .lesson-progress::-webkit-progress-value { @apply rounded-full bg-primary; }
   .lesson-progress::-moz-progress-bar { @apply rounded-full bg-primary; }
 }
+
+/* Failure animation: Nabu splats into the screen, falls, then sits dazed with stars circling his head (~4.6s). */
+.nabu-fail {
+  --nabu-size: min(42vmin, 320px);
+  --orbit-rx: calc(var(--nabu-size) * 0.3);
+  --orbit-ry: calc(var(--nabu-size) * 0.06);
+  --orbit-period: 1.2s;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  animation: nabu-fail-shake 4.6s linear forwards;
+}
+
+/* Glass crack at the impact point: drawn behind Nabu so it shows around him and stays after he falls. */
+.nabu-fail__crack {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(120vmin, 1000px);
+  height: min(120vmin, 1000px);
+  translate: -50% -50%;
+  overflow: visible;
+  animation: nabu-fail-crack-fade 4.6s linear forwards;
+}
+
+.nabu-fail__crack path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.nabu-fail__crack .is-ray { animation: nabu-fail-crack-ray 4.6s ease-out forwards; }
+.nabu-fail__crack .is-ring { animation: nabu-fail-crack-ring 4.6s ease-out forwards; }
+.nabu-fail__crack-dark { stroke: color-mix(in oklch, var(--foreground) 60%, transparent); stroke-width: 2.5px; }
+.nabu-fail__crack-glint { stroke: oklch(1 0 0 / 0.85); stroke-width: 1.2px; translate: -2px -2px; }
+
+.nabu-fail__flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, transparent 35%, color-mix(in oklch, var(--destructive) 22%, transparent));
+  opacity: 0;
+  animation: nabu-fail-flash 4.6s linear forwards;
+}
+
+.nabu-fail__body {
+  position: relative;
+  width: var(--nabu-size);
+  aspect-ratio: 1;
+  opacity: 0;
+  animation: nabu-fail-body 4.6s linear forwards;
+}
+
+.nabu-fail__squash {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 60%;
+  filter: drop-shadow(0 10px 18px color-mix(in oklch, var(--foreground) 25%, transparent));
+  animation: nabu-fail-squash 4.6s linear forwards;
+}
+
+.nabu-fail__nabu {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nabu-fail__face { stroke: var(--foreground); }
+
+/* Normal face until the splat (0.35s), then dazed. */
+.nabu-fail__face-happy { opacity: 0; animation: nabu-fail-happy 4.6s linear forwards; }
+.nabu-fail__face-dazed { opacity: 1; animation: nabu-fail-dazed 4.6s linear forwards; }
+
+/* Orbit centre sits around the top of his head (fingertips). No opacity or
+   transform here, so stars can pass behind Nabu via z-index. */
+.nabu-fail__stars {
+  position: absolute;
+  left: 50%;
+  top: 27%;
+  width: 0;
+  height: 0;
+}
+
+.nabu-fail__star-y,
+.nabu-fail__star-x {
+  position: absolute;
+  animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-duration: calc(var(--orbit-period) / 2);
+}
+
+/* y (with depth + z-order) and x swing a quarter-period apart, tracing an ellipse. */
+.nabu-fail__star-y {
+  animation-name: nabu-fail-orbit-y;
+  animation-delay: calc(var(--orbit-period) * var(--i) / -3 - var(--orbit-period) / 4);
+}
+
+.nabu-fail__star-x {
+  animation-name: nabu-fail-orbit-x;
+  animation-delay: calc(var(--orbit-period) * var(--i) / -3);
+}
+
+.nabu-fail__star {
+  display: block;
+  width: calc(var(--nabu-size) * 0.15);
+  max-width: none; /* Tailwind's img max-width:100% would collapse it inside the zero-width orbit boxes */
+  height: auto;
+  translate: -50% -50%;
+  opacity: 0;
+  user-select: none;
+  animation: nabu-fail-spin 0.9s linear infinite, nabu-fail-stars 4.6s linear forwards;
+}
+
+/* 0.35s splat · 1.2s peel off · 2.0s land · 2.4s settle, stars in · 4.2s fade out */
+@keyframes nabu-fail-body {
+  0%   { opacity: 0; transform: translateY(-6vh) scale(0.15) rotate(-25deg); animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6); }
+  3%   { opacity: 1; }
+  7.6% { transform: translateY(0) scale(1.6) rotate(0deg); }
+  26%  { transform: translateY(5vh) scale(1.6) rotate(2deg); animation-timing-function: cubic-bezier(0.55, 0, 0.9, 0.5); }
+  43.5% { transform: translateY(24vh) scale(0.85) rotate(14deg); animation-timing-function: ease-out; }
+  47.8% { transform: translateY(17vh) scale(0.85) rotate(9deg); animation-timing-function: ease-in; }
+  52%  { transform: translateY(24vh) scale(0.85) rotate(12deg); }
+  91%  { opacity: 1; transform: translateY(24vh) scale(0.85) rotate(12deg); }
+  100% { opacity: 0; transform: translateY(26vh) scale(0.8) rotate(12deg); }
+}
+
+@keyframes nabu-fail-squash {
+  0%, 7%  { transform: scale(1, 1); }
+  7.6% { transform: scale(1.3, 0.72); }
+  10%  { transform: scale(1.12, 0.9); }
+  12.5% { transform: scale(1.22, 0.8); }
+  15%  { transform: scale(1.17, 0.85); }
+  26%  { transform: scale(1.19, 0.83); }
+  30%  { transform: scale(0.92, 1.1); }
+  36%  { transform: scale(1, 1); }
+  43.5% { transform: scale(1.18, 0.82); }
+  47%  { transform: scale(0.95, 1.06); }
+  52%  { transform: scale(1.08, 0.93); }
+  56%, 100% { transform: scale(1, 1); }
+}
+
+/* Cracks shoot out on impact (0.35s), the web rings follow a beat later. */
+@keyframes nabu-fail-crack-ray {
+  0%, 7.6% { stroke-dashoffset: 1; }
+  12%, 100% { stroke-dashoffset: 0; }
+}
+
+@keyframes nabu-fail-crack-ring {
+  0%, 10% { stroke-dashoffset: 1; }
+  15%, 100% { stroke-dashoffset: 0; }
+}
+
+@keyframes nabu-fail-crack-fade {
+  0%, 91% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes nabu-fail-shake {
+  0%, 7.6% { transform: translate(0, 0); }
+  8.4%  { transform: translate(-9px, 6px); }
+  9.2%  { transform: translate(8px, -5px); }
+  10%   { transform: translate(-5px, 3px); }
+  10.8% { transform: translate(3px, -2px); }
+  11.6%, 100% { transform: translate(0, 0); }
+}
+
+@keyframes nabu-fail-happy {
+  0%, 7.5% { opacity: 1; }
+  7.6%, 100% { opacity: 0; }
+}
+
+@keyframes nabu-fail-dazed {
+  0%, 7.5% { opacity: 0; }
+  7.6%, 100% { opacity: 1; }
+}
+
+@keyframes nabu-fail-flash {
+  0%, 7% { opacity: 0; }
+  9%   { opacity: 1; }
+  21%  { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@keyframes nabu-fail-stars {
+  0%, 50% { opacity: 0; }
+  56%  { opacity: 1; }
+  91%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Top of the orbit is behind his head; bottom is in front. */
+@keyframes nabu-fail-orbit-y {
+  from { transform: translateY(calc(var(--orbit-ry) * -1)) scale(0.7); z-index: -1; }
+  to   { transform: translateY(var(--orbit-ry)) scale(1.1); z-index: 1; }
+}
+
+@keyframes nabu-fail-orbit-x {
+  from { transform: translateX(calc(var(--orbit-rx) * -1)); }
+  to   { transform: translateX(var(--orbit-rx)); }
+}
+
+@keyframes nabu-fail-spin {
+  to { rotate: 360deg; }
+}
+
+@keyframes nabu-fail-fade {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nabu-fail__body { animation: nabu-fail-fade 1.5s ease forwards; }
+  .nabu-fail__squash, .nabu-fail__flash, .nabu-fail__face-happy, .nabu-fail__face-dazed, .nabu-fail__star-y, .nabu-fail__star-x { animation: none; }
+  .nabu-fail__star { animation: none; }
+  .nabu-fail { animation: none; }
+  .nabu-fail__crack { display: none; }
+}

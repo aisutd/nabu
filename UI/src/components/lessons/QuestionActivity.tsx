@@ -5,6 +5,7 @@ import type { Attempt } from '../../data/lesson_progress'
 import type { SpeakingResult } from '../../api/speaking'
 import SpeakingActivity from '../speaking/SpeakingActivity'
 import LessonPicture from './LessonPicture'
+import NabuFailAnimation from '../feedback/NabuFailAnimation'
 
 const primary = 'min-h-12 rounded-lg bg-primary px-6 py-3 font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40'
 const secondary = 'min-h-11 rounded-lg border bg-card px-4 py-2 text-sm font-bold hover:bg-secondary disabled:opacity-40'
@@ -22,6 +23,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
   const [selected, setSelected] = useState<string[]>(previous?.answerIds ?? [])
   const [attempt, setAttempt] = useState<Attempt | null>(previous ?? null)
   const [busy, setBusy] = useState(false)
+  const [failPlay, setFailPlay] = useState<number | null>(null)
   const checked = question.kind !== 'speaking' && attempt !== null && !attempt.skipped
   const ready = canContinueQuestion(question, attempt)
 
@@ -42,6 +44,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
     const next = makeAttempt(selected, text, correct)
     setAttempt(next)
     onAttempt(next)
+    if (!correct) setFailPlay(Date.now())
   }
 
   function speakingComplete(result: SpeakingResult) {
@@ -58,6 +61,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
 
   return (
     <div>
+      {failPlay !== null && <NabuFailAnimation key={failPlay} onDone={() => setFailPlay(null)} />}
       {question.kind === 'speaking' ? (
         <>
           <p className="mb-5 text-muted-foreground">{question.prompt}</p>
