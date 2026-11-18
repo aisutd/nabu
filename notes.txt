@@ -43,6 +43,7 @@ Frontend:
 Next:
 - Modularize the pronunciation code into subfolders after the integration;
 - actually implement the figma/layout/reqs the mentors have for the Frontend
+- reduce time for pronounciation analysis to load
 
 For Frontend:
 - dark mode, light mode
