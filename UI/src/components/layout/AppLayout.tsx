@@ -19,7 +19,7 @@ export default function AppLayout({ currentPage, children }: Props) {
       </header>
       <Sidebar currentPage={currentPage} open={menuOpen} onNavigate={() => setMenuOpen(false)} />
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-8 [overflow-wrap:anywhere] sm:px-6 md:p-10">
-        <div className="mx-auto max-w-5xl">{children}</div>
+        <div className={`mx-auto ${currentPage === 'handwriting' ? 'max-w-7xl' : 'max-w-5xl'}`}>{children}</div>
       </main>
     </div>
   )

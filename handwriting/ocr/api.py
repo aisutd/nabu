@@ -1,7 +1,10 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
+from io import BytesIO
+from PIL import Image, UnidentifiedImageError
 import os
 import numpy as np
 import cv2
@@ -49,7 +52,50 @@ def ocr_tuple(file: UploadFile = File(...), lang: str = Form('en')):
 def ocr_errorfinder(file: UploadFile = File(...), expected: str = Form(...)):
     #Call the errorfinder function from errorfinder to find errors in the recognized text   
     error = errorfinder.findError(file.file, expected) #hand paddleocr the pixels (same for the rest of the endpoints)
+    return highlighted_errors(error)
+
+
+def highlighted_errors(error):
     culledError = errorfinder.cullErrorFromThreshold(error, threshold=errorfinder.generateThreshold(error[1]))
     combinedError = errorfinder.combineAndTransform(culledError)
     points, sizes = errorfinder.cullPointsFromLeaderboard(combinedError, 5)
     return points, sizes, error[2]
+
+def compare_glyph(file, expected):
+    expected = expected.strip()
+    if len(expected) != 1:
+        raise HTTPException(422, "Enter one reference character.")
+    try:
+        points, distances, bounds, angles = errorfinder.findError(file.file, expected)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(422, "Choose a readable handwriting image.") from exc
+    if not distances or not bounds[2] or not bounds[3]:
+        raise HTTPException(422, "No clear handwriting was found. Try a darker sample on plain paper.")
+    return points, distances, bounds, angles
+
+
+@app.get("/ocr/reference")
+def reference_glyph(expected: str = Query(min_length=1, max_length=1)):
+    mask = errorfinder.renderTextMask(expected)
+    bounds = mask.getbbox()
+    if bounds is None:
+        raise HTTPException(422, "Enter a visible reference character.")
+    glyph = mask.crop(bounds)
+    image = Image.new("RGBA", glyph.size)
+    image.putalpha(glyph)
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return Response(output.getvalue(), media_type="image/png")
+
+
+@app.post("/ocr/errorfinder/grade")
+def grade_handwriting(file: UploadFile = File(...), expected: str = Form(...)):
+    _, distances, _, _ = compare_glyph(file, expected)
+    # Distances are measured in a unit square after aligning the two glyphs.
+    mean_distance = sum(distances) / len(distances)
+    return {"similarity": round(100 * max(0, 1 - mean_distance / np.sqrt(2)))}
+
+
+@app.post("/ocr/errorfinder/review")
+def review_handwriting(file: UploadFile = File(...), expected: str = Form(...)):
+    return highlighted_errors(compare_glyph(file, expected))

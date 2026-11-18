@@ -6,6 +6,7 @@ Usage (from the asl folder): ../venv/Scripts/python 8_demo_server.py
 Then open http://localhost:8000 in a browser.
 """
 
+import argparse
 import json
 import pickle
 import threading
@@ -98,7 +99,16 @@ class LiveDemo:
         with self.lock:
             # Read the text live, so a button click shows up before the next camera frame.
             text = self.recognizer.transcript.text
-            return dict(self.recognizer.state, text=text, error=self.error)
+            state = {
+                "mode": "no_hand",
+                "letter": None,
+                "speed": 0.0,
+                "guesses": [],
+                "last_sign": None,
+                "signs_enabled": self.recognizer.sign_bundle is not None,
+            }
+            state.update(self.recognizer.state, text=text, error=self.error)
+            return state
 
     def latest_jpeg(self):
         with self.lock:
@@ -166,6 +176,9 @@ def make_handler(demo):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=PORT)
+    args = parser.parse_args()
     letter_bundle = load_bundle(LETTER_MODEL, check_model_bundle)
     sign_bundle = None
     if SIGN_MODEL.exists():
@@ -174,8 +187,8 @@ def main():
         print("No sign model yet, so only letters are recognized. Run 7_train_signs.py.")
     demo = LiveDemo(HybridRecognizer(letter_bundle, sign_bundle))
     threading.Thread(target=demo.run_camera, daemon=True).start()
-    server = ThreadingHTTPServer((HOST, PORT), make_handler(demo))
-    print(f"Demo running at http://localhost:{PORT}  (Ctrl+C to stop)")
+    server = ThreadingHTTPServer((HOST, args.port), make_handler(demo))
+    print(f"Demo running at http://localhost:{args.port}  (Ctrl+C to stop)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -336,3 +336,9 @@
   .nabu-fail { animation: none; }
   .nabu-fail__crack { display: none; }
 }
+
+.handwriting-guides {
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.5px), var(--color-border) 50%, transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--color-border) 50%, transparent calc(50% + 0.5px));
+}
