@@ -1,6 +1,4 @@
-const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL || ''
-).replace(/\/$/, '')
+import { apiUrl } from './backend'
 
 export type Transcription = {
   heard: string
@@ -41,7 +39,7 @@ export async function request<T>(
   path: string,
   options: RequestInit,
 ): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, options)
+  const response = await fetch(apiUrl(path), options)
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)
@@ -58,7 +56,7 @@ export async function request<T>(
 }
 
 export function mediaUrl(path: string) {
-  return `${API_BASE}${path}`
+  return apiUrl(path)
 }
 
 export async function uploadVideo(file: File) {

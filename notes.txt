@@ -44,6 +44,7 @@ Next:
 - Modularize the pronunciation code into subfolders after the integration;
 - actually implement the figma/layout/reqs the mentors have for the Frontend
 - reduce time for pronounciation analysis to load
+- make the app responsive to mobile
 
 For Frontend:
 - dark mode, light mode
@@ -182,8 +183,7 @@ planning.md: Handwriting design ideas and planned work.
 ==================================================================================================================================================
 
 Run pronunciation commands from the nabu repository root. The package name
-is spelled pronounciation. Handwriting commands below use --app-dir because
-that API currently uses sibling imports.
+is spelled pronounciation. One FastAPI server provides all three APIs.
 
 External dependencies — not installed by requirements.txt
 --------------------------------------------------------
@@ -282,13 +282,12 @@ training_mode values and are not accepted by this API as currently written.
 
 Before starting the backend, replace this placeholder with the actual path:
   export NABU_MOUTH_CHECKPOINT="/absolute/path/to/trained_model.pt"
-  python -m uvicorn pronounciation.api:app --reload --port 8000
+  python run_backends.py
 
 Check model loading directly at:
   http://127.0.0.1:8000/models/mouth
 A 503 response means the checkpoint cannot be found or loaded; inspect detail.
-The default checkpoint path in api.py is Windows-specific, so set the environment
-variable on macOS. Restart the server after changing the checkpoint.
+The server defaults to the checkpoint bundled in the repository. Restart the server after changing the checkpoint.
 
 Use one isolated word per clip, at most five seconds long, with a detectable
 mouth at every sampled frame. The analysis workspace shows cosine similarity,
@@ -380,7 +379,7 @@ step 1 below. Install FFmpeg and check that both model files exist.
 
 Terminal 1, from the repository root:
   source .venv/bin/activate
-  python -m uvicorn pronounciation.api:app --reload --port 8000
+  python run_backends.py
 
 Terminal 2, from the repository root (Node.js and npm required):
   cd UI
@@ -410,15 +409,11 @@ For deployment, set VITE_API_BASE_URL to the reachable backend before building,
 and configure NABU_ALLOWED_ORIGINS on the backend for the frontend origin.
 Vite's development proxy is not included in the production build.
 
-Handwriting API + tester — optional, separate server
+Handwriting API + tester
 ----------------------------------------------------
-From the repository root with the Python environment activated:
-  python -m uvicorn api:app --app-dir handwriting/ocr --port 8001
-
-Open http://127.0.0.1:8001/tester/ for the handwritten-image tester,
-or http://127.0.0.1:8001/docs for endpoint documentation.
-PaddleOCR may download language models on first use. This API has custom
-shutdown handling; start without --reload initially.
+With the unified server running, open http://127.0.0.1:8000/tester/ for the
+handwritten-image tester or http://127.0.0.1:8000/docs for endpoint
+documentation. PaddleOCR may download language models on first use.
 
 Desktop collection / CLI / data preparation
 -------------------------------------------
@@ -553,7 +548,7 @@ Expect very small shape differences when repeated detections are consistent.
 8. RUN THE SAME TESTS THROUGH THE API
 
 Start the server in an activated terminal:
-  python -m uvicorn pronounciation.api:app
+  python run_backends.py
 
 Open the interactive API documentation:
   http://127.0.0.1:8000/docs

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi import Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from .learner_feedback import learner_feedback
@@ -37,9 +37,7 @@ def resolve_task(body):
     return expected, expected.lower() if expected and len(expected.split()) == 1 else None
 
 
-def create_speaking_router(data_dir, reference_dir, reference_files, upload_video, compare_recordings, processing):
-    router = APIRouter(prefix="/speaking", tags=["Speaking"])
-
+def create_speaking_handlers(data_dir, reference_dir, reference_files, upload_video, compare_recordings, processing):
     def source_path(recording_id):
         for suffix in (".mp4", ".wav"):
             source = data_dir / f"{recording_id}{suffix}"
@@ -47,14 +45,12 @@ def create_speaking_router(data_dir, reference_dir, reference_files, upload_vide
                 return source
         raise HTTPException(404, "Recording not found")
 
-    @router.get("/exercises/{exercise_id}")
     def exercise_info(exercise_id: str):
         exercise = EXERCISES.get(exercise_id)
         if exercise is None:
             raise HTTPException(404, "Speaking exercise not found")
         return {"id": exercise_id, **exercise}
 
-    @router.post("/recordings", status_code=201)
     def upload_recording(media: UploadFile, capture: Literal["audio", "video"] = Form(...)):
         if capture == "video":
             result = upload_video(media)
@@ -85,7 +81,6 @@ def create_speaking_router(data_dir, reference_dir, reference_files, upload_vide
             media.file.close()
         return {"id": str(recording_id), "media_url": f"/media/{destination.name}", "capture": capture}
 
-    @router.post("/review")
     def review(body: SpeakingRequest):
         expected, reference_word = resolve_task(body)
         source = source_path(body.recording_id)
@@ -155,4 +150,13 @@ def create_speaking_router(data_dir, reference_dir, reference_files, upload_vide
         return {"recording_id": str(body.recording_id), "exercise_id": body.exercise_id, "expected_text": expected, "transcription": speech,
                 "comparison": comparison, "feedback": feedback, "checks": checks, "errors": errors}
 
+    return exercise_info, upload_recording, review
+
+
+def create_speaking_router(*args, **kwargs):
+    from fastapi import APIRouter
+    from run_backends import register_speaking_routes
+
+    router = APIRouter()
+    register_speaking_routes(router, create_speaking_handlers(*args, **kwargs))
     return router

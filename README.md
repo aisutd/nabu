@@ -104,7 +104,7 @@ ffmpeg -n -i input.mp4 -map 0:v:0 -map '0:a:0?' \
   -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart output_browser.mp4
 ```
 
-Whisper may download `small.en` on first transcription. PaddleOCR initializes its English model when its API starts and may need a model download. Allow network access, disk space, and startup time for those downloads.
+Whisper may download `small.en` on first transcription. PaddleOCR may download its model on the first OCR request. Allow network access, disk space, and startup time for those downloads.
 
 ## Run the web app
 
@@ -117,15 +117,9 @@ source .venv/bin/activate
 python run_backends.py
 ```
 
-The launcher starts all three services on the same machine. Press Ctrl+C to stop them together.
+One FastAPI server serves all three features on port 8000. Route definitions are in `run_backends.py`, and interactive documentation is available at <http://127.0.0.1:8000/docs>. Press Ctrl+C to stop the server.
 
-| Service | Local endpoint |
-| --- | --- |
-| Pronunciation and speaking | <http://127.0.0.1:8000/docs> |
-| Handwriting | <http://127.0.0.1:8001/docs> |
-| ASL | <http://127.0.0.1:8002> |
-
-The launcher defaults to the bundled mouth checkpoint. Set `NABU_MOUTH_CHECKPOINT` before starting it to use another checkpoint. ASL uses the webcam attached to the machine running the launcher.
+The server defaults to the bundled mouth checkpoint. Set `NABU_MOUTH_CHECKPOINT` before starting it to use another checkpoint.
 
 Compatible neural checkpoints require `training_mode="multivsr-finetune"`, input shape `(29, 40, 3)`, and matching `MouthEncoder` weights. Baseline checkpoints from `mouth_training.py` use different training modes and are not accepted by the API as currently written.
 
@@ -143,7 +137,7 @@ Open the URL Vite prints, normally <http://localhost:5173>.
 - `#/lesson/say-it-aloud`: pronunciation lesson.
 - `#/pronunciation`: standalone practice lab with diagnostic output.
 
-Normal lessons run without the Python backend. Speaking reviews require it. Vite proxies `/speaking`, `/practice`, `/recordings`, `/comparisons`, and `/media` to port 8000. Keep both terminals running to use all three practice tabs.
+Normal lessons run without the Python backend. Speaking reviews require it. Vite proxies the pronunciation, handwriting, and ASL routes to port 8000. Keep both terminals running to use all three practice tabs.
 
 ## Speaking workflow and reuse
 
@@ -191,33 +185,16 @@ See the [speaking integration guide](UI/src/components/speaking/README.md) for a
 
 Use `/docs` for the exact fields and response shapes.
 
-## Run only the ASL service
+## ASL and handwriting
 
-For standalone ASL development, run this from the repository root:
-
-```bash
-source .venv/bin/activate
-python asl/8_demo_server.py --port 8002
-```
-
-Open <http://localhost:5173/#/asl>. The ASL service uses the webcam on the machine running Python, which may require camera permission for your terminal. The bundled letter model enables fingerspelling. To recognize supported words, place a trained `asl_sign_model.p` in `asl/`. The standalone demo is also available at <http://127.0.0.1:8002>.
-
-## Run only the handwriting API and tester
-
-For standalone handwriting development, run this from the repository root:
-
-```bash
-source .venv/bin/activate
-python -m uvicorn api:app --app-dir handwriting/ocr --port 8001
-```
-
+- ASL tab: <http://localhost:5173/#/asl>
+- ASL demo: <http://127.0.0.1:8000/asl-demo>
 - Handwriting tab: <http://localhost:5173/#/handwriting>
-- Standalone tester: <http://127.0.0.1:8001/tester/>
-- API documentation: <http://127.0.0.1:8001/docs>
+- Handwriting tester: <http://127.0.0.1:8000/tester/>
 
-The backend serves `handwriting/ocr/frontend/index.html` directly; no npm server is required for this tester. Use its HTTP URL instead of opening the HTML file directly. The directory also contains a separate `canvas.js` helper; merely placing a script beside HTML does not load it.
+ASL uses the webcam on the machine running Python, which may require camera permission for your terminal. The bundled letter model enables fingerspelling. To recognize supported words, place a trained `asl_sign_model.p` in `asl/`.
 
-In the Handwriting tab, select a PNG and enter a reference character. Find errors highlights stroke differences and Grade handwriting shows estimated shape similarity. In the standalone tester, upload a handwriting image and test `POST /ocr/text`, `POST /ocr/tuple`, or `POST /ocr/errorfinder/findError`. The error finder compares image/SVG ink points with expected text rendered using bundled fonts. Start without `--reload`: this API has custom Paddle signal/shutdown handling.
+In the Handwriting tab, select a PNG and enter a reference character. Find errors highlights stroke differences and Grade handwriting shows estimated shape similarity. In the standalone tester, upload a handwriting image and test `POST /ocr/text`, `POST /ocr/tuple`, or `POST /ocr/errorfinder/findError`. The error finder compares image/SVG ink points with expected text rendered using bundled fonts.
 
 If startup reports `No module named 'paddle'`, install the **`paddlepaddle`** distribution into the same active Python environment; the import and package names differ. Confirm the remaining handwriting dependencies were installed from `requirements.txt` too.
 
@@ -271,7 +248,7 @@ npm run build
 npm run preview
 ```
 
-`preview` serves the built frontend locally. Set `VITE_API_BASE_URL` to a reachable backend **before building**, and configure the backend's comma-separated `NABU_ALLOWED_ORIGINS` for the frontend origin. Vite proxies API requests during development and preview. For a deployed build, route `/ocr/*` to the handwriting service and `/asl-api/*` to the ASL service with the `/asl-api` prefix stripped. Use the ASL demo with a local, trusted deployment because the service shares the host webcam stream and transcript across clients. `UI/.env.production` is local/ignored; don't assume another checkout has it. Fonts load through Google Fonts with system fallbacks.
+`preview` serves the built frontend locally. Set `VITE_API_BASE_URL` to a reachable backend **before building**, and configure the backend's comma-separated `NABU_ALLOWED_ORIGINS` for the frontend origin. Vite proxies API requests during development and preview. For a same-origin deployment, forward the API paths to the unified FastAPI server with their paths intact. Use the ASL demo with a local, trusted deployment because the service shares the host webcam stream and transcript across clients. `UI/.env.production` is local/ignored; don't assume another checkout has it. Fonts load through Google Fonts with system fallbacks.
 
 For native wrappers, after building in `UI/`:
 

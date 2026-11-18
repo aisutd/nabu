@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { apiUrl } from '../../api/backend'
 
 type Markers = [points: [number, number][], sizes: number[]]
 type Review = { mode: 'errors'; markers: Markers } | { mode: 'grade'; similarity: number }
@@ -57,7 +58,7 @@ export default function HandwritingPage() {
     const path = mode === 'errors' ? 'review' : 'grade'
 
     try {
-      const response = await fetch(`/ocr/errorfinder/${path}`, { method: 'POST', body: form })
+      const response = await fetch(apiUrl(`/ocr/errorfinder/${path}`), { method: 'POST', body: form })
       if (!response.ok) {
         const body = await response.json().catch(() => null)
         if (response.status === 422 && typeof body?.detail === 'string') {
@@ -73,7 +74,7 @@ export default function HandwritingPage() {
         setReview({ mode, similarity })
       }
     } catch {
-      setError('Could not review the sample. Check that the handwriting API is running on port 8001.')
+      setError('Could not review the sample. Check that the Nabu backend is running on port 8000.')
     } finally {
       setPending(undefined)
     }
@@ -151,7 +152,7 @@ export default function HandwritingPage() {
               </div>
               <div className={`${previewBox} relative`}>
                 {hasGlyph && failedReference !== glyph ? (
-                  <img key={glyph} src={`/ocr/reference?expected=${encodeURIComponent(glyph)}`} alt={`Reference glyph ${glyph}`}
+                  <img key={glyph} src={apiUrl(`/ocr/reference?expected=${encodeURIComponent(glyph)}`)} alt={`Reference glyph ${glyph}`}
                     onError={() => setFailedReference(glyph)} className="absolute inset-0 m-auto size-[38%] object-contain" />
                 ) : (
                   <p className="z-10 rounded-lg bg-card p-2 text-center text-sm text-muted-foreground">

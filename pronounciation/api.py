@@ -7,7 +7,6 @@ from functools import lru_cache
 from pathlib import Path
 from threading import Lock
 from uuid import UUID, uuid4
-from fastapi.middleware.cors import CORSMiddleware
 
 import cv2
 import matplotlib
@@ -16,8 +15,7 @@ import torch
 
 matplotlib.use("Agg")
 
-from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.staticfiles import StaticFiles
+from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from .learner_feedback import learner_feedback
 
@@ -29,27 +27,15 @@ from .detector import MouthTracker
 from .transcribe import check
 from .video_input import landmarks_from_video, prepare_wav
 
-app = FastAPI(title="Nabu Pronunciation")
-
-allowed_origins = os.getenv(
-    "NABU_ALLOWED_ORIGINS",
-    "http://localhost:5173,capacitor://localhost,https://localhost",
-).split(",")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[origin.strip() for origin in allowed_origins],
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
-
-DATA = Path("pronounciation/test_data/api")
+DATA = Path(__file__).resolve().parent / "test_data" / "api"
 PLOTS = DATA / "plots"
 PLOTS.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=str(DATA)), name="media")
 processing = Lock()
 
-MODEL_PATH = Path(os.environ.get("NABU_MOUTH_CHECKPOINT", r"C:\NabuData\models\nabu_multivsr_overnight_b0050.pt"))
+MODEL_PATH = Path(os.environ.get(
+    "NABU_MOUTH_CHECKPOINT",
+    str(Path(__file__).resolve().parent / "nabu_multivsr_overnight_b0050.pt"),
+))
 MODEL_SHAPE = (29, 40, 3)
 MAX_WORD_SECONDS = 5.0
 
@@ -59,7 +45,6 @@ REFERENCE_FILES = {word: f"{word}_browser.mp4" for word in ("bad", "back", "bail
 REFERENCE_FILES["kent"] = "Kent_browser.mp4"
 
 
-@app.get("/practice")
 def practice_library():
     return [
         {"id": word, "word": word, "has_audio": False, "video_url": f"/practice/{word}/video"}
@@ -68,7 +53,6 @@ def practice_library():
     ]
 
 
-@app.get("/practice/{word}/video")
 def practice_reference(word: str):
     filename = REFERENCE_FILES.get(word)
     if filename is None or not (REFERENCE_DIR / filename).is_file():
@@ -179,7 +163,6 @@ def neural_result(user_path: Path, example_path: Path):
     }
 
 
-@app.post("/recordings", status_code=201)
 def upload_video(video: UploadFile):
     suffix = Path(video.filename or "").suffix.lower()
 
@@ -228,7 +211,6 @@ def upload_video(video: UploadFile):
     }
 
 
-@app.post("/recordings/{recording_id}/transcription")
 def transcription(recording_id: UUID, label: str):
     source = video_path(recording_id)
     with processing:
@@ -240,7 +222,6 @@ def transcription(recording_id: UUID, label: str):
     return {"heard": heard, "expected": label, "match": match}
 
 
-@app.post("/comparisons")
 def comparison(user_id: UUID, example_id: UUID, label: str):
     filename = re.sub(r"[^a-z0-9_-]+", "_", label.strip().lower()).strip("_")
     if not filename or len(filename) > 100:
@@ -283,7 +264,6 @@ def comparison(user_id: UUID, example_id: UUID, label: str):
     }
 
 
-@app.post("/comparisons/neural")
 def neural_comparison(user_id: UUID, example_id: UUID, label: str):
     if len(label.strip().split()) != 1:
         raise HTTPException(422, "Neural comparison needs a single expected word")
@@ -298,7 +278,6 @@ def neural_comparison(user_id: UUID, example_id: UUID, label: str):
     return {"user_id": str(user_id), "example_id": str(example_id), "expected": label, **result}
 
 
-@app.get("/models/mouth")
 def mouth_model_info():
     try:
         _, info = mouth_model()
@@ -307,7 +286,6 @@ def mouth_model_info():
     return {**info, "loaded": True, "device": "cpu"}
 
 
-@app.post("/practice/review")
 def review_attempt(user_id: UUID, example_id: UUID, label: str):
     if len(label.strip().split()) != 1:
         raise HTTPException(422, "Learner practice requires one isolated word")
@@ -331,9 +309,8 @@ def review_attempt(user_id: UUID, example_id: UUID, label: str):
     return {**results, "errors": errors, "feedback": learner_feedback(**results)}
 
 
-# Shared speaking workflows reuse the same capture processing, model, and lock.
-from .speaking import create_speaking_router
-
-app.include_router(create_speaking_router(
-    DATA, REFERENCE_DIR, REFERENCE_FILES, upload_video, comparison, processing,
-))
+def __getattr__(name):
+    if name == "app":
+        from run_backends import app
+        return app
+    raise AttributeError(name)

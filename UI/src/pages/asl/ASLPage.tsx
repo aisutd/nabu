@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiUrl } from '../../api/backend'
 
 type Prediction = { label: string; chance: number }
 type DemoState = {
@@ -12,7 +13,7 @@ type DemoState = {
   error: string | null
 }
 
-const endpoint = '/asl-api'
+const endpoint = apiUrl('/asl-api')
 const modeLabels = { letter: 'Reading letter', moving: 'Reading motion', no_hand: 'No hand' }
 const commands = [['space', 'Space'], ['backspace', 'Delete'], ['clear', 'Clear']] as const
 const card = 'rounded-xl border bg-card p-5 shadow-card'
@@ -30,6 +31,7 @@ export default function ASLPage() {
   useEffect(() => {
     const controller = new AbortController()
     let timer: number | undefined
+    let pollDelay = 250
 
     async function poll() {
       try {
@@ -39,14 +41,16 @@ export default function ASLPage() {
         })
         if (!response.ok) throw new Error('ASL service unavailable')
         const data: DemoState = await response.json()
+        pollDelay = 250
         if (!controller.signal.aborted) {
           setState(data)
           setConnected(true)
         }
       } catch {
+        pollDelay = Math.min(10_000, Math.max(1_000, pollDelay * 2))
         if (!controller.signal.aborted) setConnected(false)
       }
-      if (!controller.signal.aborted) timer = window.setTimeout(poll, 250)
+      if (!controller.signal.aborted) timer = window.setTimeout(poll, pollDelay)
     }
 
     void poll()
@@ -70,7 +74,7 @@ export default function ASLPage() {
   }
 
   const cameraError = connected === false
-    ? 'ASL service unavailable. Start the ASL server on port 8002.'
+    ? 'ASL service unavailable. Start the Nabu backend on port 8000.'
     : state?.error
 
   return (
@@ -103,7 +107,7 @@ export default function ASLPage() {
             <p className="min-h-20 whitespace-pre-wrap py-2 font-heading text-3xl">{state?.text}</p>
             <div className="flex flex-wrap gap-2">
               {commands.map(([command, label]) => (
-                <button key={command} type="button" disabled={!connected || editing} onClick={() => void edit(command)}
+                <button key={command} type="button" disabled={!connected || editing || Boolean(cameraError)} onClick={() => void edit(command)}
                   className={`rounded-lg px-4 py-2 font-bold disabled:opacity-50 ${command === 'clear' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
                   {label}
                 </button>
