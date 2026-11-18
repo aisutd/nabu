@@ -4,7 +4,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from huggingface_hub import hf_hub_download
-from .config import ALL_LIP_INDICES
+from ..analysis.config import ALL_LIP_INDICES
 
 
 # Location of our MediaPipe model

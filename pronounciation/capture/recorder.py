@@ -1,7 +1,7 @@
 import os
 import re
 import csv
-from .config import ALL_LIP_INDICES
+from ..analysis.config import ALL_LIP_INDICES
 
 DATASET_PATH = "pronounciation/test_data/dataset.csv"
 

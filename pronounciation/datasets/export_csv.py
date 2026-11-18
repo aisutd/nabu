@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 import numpy as np
-from .config import ALL_LIP_INDICES
+from ..analysis.config import ALL_LIP_INDICES
 
 
 # Location of our raw webcam recordings

@@ -4,7 +4,7 @@ This is a self-supervised *mouth-motion* experiment, NOT word recognition or
 pronunciation grading. Requires processed local face-track MP4 clips.
 
 Run from the Nabu repository root after preprocessing enough clips:
-    python -m pronounciation.train_multivsr --epochs 2
+    python -m pronounciation.training.train_multivsr --epochs 2
 
 The original 100-video checkpoint is only READ; we save a NEW checkpoint.
 Where official train and val split folders exist, this uses those splits.

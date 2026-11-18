@@ -10,8 +10,8 @@ from fastapi import Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from .learner_feedback import learner_feedback
-from .transcribe import check
-from .video_input import prepare_wav
+from ..analysis.transcribe import check
+from ..analysis.video_input import prepare_wav
 
 # Small server-owned exercise registry. Replace with the lesson database when available.
 EXERCISES = {

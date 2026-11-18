@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pronounciation.speaking import create_speaking_router
+from pronounciation.service.speaking import create_speaking_router
 
 
 def wav_bytes():
@@ -39,7 +39,7 @@ class SpeakingServiceTests(unittest.TestCase):
         app = FastAPI()
         app.include_router(create_speaking_router(self.data, self.refs, {'june': 'june_browser.mp4'}, Mock(), self.compare, Lock()))
         self.client = TestClient(app)
-        self.check = patch('pronounciation.speaking.check', return_value=('june', True)).start()
+        self.check = patch('pronounciation.service.speaking.check', return_value=('june', True)).start()
         self.addCleanup(patch.stopall)
 
     def review(self, **kwargs):
@@ -49,7 +49,7 @@ class SpeakingServiceTests(unittest.TestCase):
         self.audio.unlink()
         (self.data / f'{self.recording_id}.mp4').write_bytes(b'demo video')
         (self.refs / 'june_browser.mp4').write_bytes(b'demo reference')
-        patch('pronounciation.speaking.prepare_wav', return_value='prepared.wav').start()
+        patch('pronounciation.service.speaking.prepare_wav', return_value='prepared.wav').start()
 
     def test_audio_expected_word_never_runs_mouth_model(self):
         result = self.review(expected_text='june').json()
@@ -103,7 +103,7 @@ class SpeakingServiceTests(unittest.TestCase):
     def test_speech_failure_preserves_mouth_result(self):
         self.video()
         self.check.side_effect = ValueError('no audio')
-        with self.assertLogs('pronounciation.speaking', level='ERROR'):
+        with self.assertLogs('pronounciation.service.speaking', level='ERROR'):
             result = self.review(expected_text='june').json()
         self.assertEqual(result['checks']['speech']['status'], 'failed')
         self.assertIsNotNone(result['comparison'])

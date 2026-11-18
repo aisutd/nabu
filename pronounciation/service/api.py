@@ -19,28 +19,28 @@ from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from .learner_feedback import learner_feedback
 
-from pronounciation.mouth_training import MouthEncoder
-from pronounciation.preprocess_recordings import normalize_landmarks, resample_sequence
+from pronounciation.training.mouth_training import MouthEncoder
+from pronounciation.datasets.preprocess_recordings import normalize_landmarks, resample_sequence
 
-from .compare import compare, plot, feedback
-from .detector import MouthTracker
-from .transcribe import check
-from .video_input import landmarks_from_video, prepare_wav
+from ..analysis.compare import compare, plot, feedback
+from ..analysis.detector import MouthTracker
+from ..analysis.transcribe import check
+from ..analysis.video_input import landmarks_from_video, prepare_wav
 
-DATA = Path(__file__).resolve().parent / "test_data" / "api"
+DATA = Path(__file__).resolve().parents[1] / "test_data" / "api"
 PLOTS = DATA / "plots"
 PLOTS.mkdir(parents=True, exist_ok=True)
 processing = Lock()
 
 MODEL_PATH = Path(os.environ.get(
     "NABU_MOUTH_CHECKPOINT",
-    str(Path(__file__).resolve().parent / "nabu_multivsr_overnight_b0050.pt"),
+    str(Path(__file__).resolve().parents[1] / "nabu_multivsr_overnight_b0050.pt"),
 ))
 MODEL_SHAPE = (29, 40, 3)
 MAX_WORD_SECONDS = 5.0
 
 # Curated local demo references. Do not expose arbitrary filesystem paths.
-REFERENCE_DIR = Path(__file__).resolve().parent / "test_data" / "video"
+REFERENCE_DIR = Path(__file__).resolve().parents[1] / "test_data" / "video"
 REFERENCE_FILES = {word: f"{word}_browser.mp4" for word in ("bad", "back", "bail", "june")}
 REFERENCE_FILES["kent"] = "Kent_browser.mp4"
 

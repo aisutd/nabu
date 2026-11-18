@@ -135,16 +135,16 @@ def parse_args():
 
 def main():
     a = parse_args()
-    if not (Path("pronounciation") / "multivsr_batch.py").is_file():
-        raise SystemExit("Run from the Nabu repository ROOT (with pronounciation/multivsr_batch.py present)")
-    if not (Path("pronounciation") / "train_multivsr.py").is_file():
-        raise SystemExit("Missing pronounciation/train_multivsr.py")
+    if not (Path("pronounciation") / "datasets" / "multivsr_batch.py").is_file():
+        raise SystemExit("Run from the Nabu repository ROOT (with pronounciation/datasets/multivsr_batch.py present)")
+    if not (Path("pronounciation") / "training" / "train_multivsr.py").is_file():
+        raise SystemExit("Missing pronounciation/training/train_multivsr.py")
     if not a.initial_checkpoint.is_file() and not a.state.exists():
         raise SystemExit(f"Missing initial checkpoint: {a.initial_checkpoint}")
     if not (ROOT / "metadata" / "multivsr.tar").exists() and not a.offline:
         raise SystemExit(f"Missing metadata TAR at {ROOT / 'metadata' / 'multivsr.tar'}")
     if not a.dry_run and sys.prefix == sys.base_prefix:
-        raise SystemExit("Use your Nabu venv explicitly: venv\\Scripts\\python.exe -m pronounciation.overnight_multivsr")
+        raise SystemExit("Use your Nabu venv explicitly: venv\\Scripts\\python.exe -m pronounciation.training.overnight_multivsr")
 
     if a.state.exists():
         state = json.loads(a.state.read_text(encoding="utf-8"))
@@ -171,7 +171,7 @@ def main():
         if problem:
             log(f"RECOVERY REFUSED: {problem}", a.log)
             return False
-        cmd = [sys.executable, "-u", "-m", "pronounciation.repair_nabu_after_training", "--batch", str(batch_number),
+        cmd = [sys.executable, "-u", "-m", "pronounciation.training.repair_nabu_after_training", "--batch", str(batch_number),
                "--prior", str(state["last_trained_batch"]), "--prior-checkpoint", state["checkpoint"],
                "--state", str(a.state), "--models", str(MODELS)]
         if run(cmd, a.log) != 0:
@@ -200,7 +200,7 @@ def main():
         new_file = MODELS / f"nabu_multivsr_overnight_b{batch_number:04d}.pt"
         if new_file.exists():
             raise SystemExit(f"Refusing to overwrite prior checkpoint: {new_file}; inspect your state file")
-        cmd = [sys.executable, "-u", "-m", "pronounciation.train_multivsr",
+        cmd = [sys.executable, "-u", "-m", "pronounciation.training.train_multivsr",
                "--epochs", str(a.epochs), "--batch-size", str(a.batch_size),
                "--init", state["checkpoint"], "--out", str(new_file)]
         if a.dry_run:
@@ -238,7 +238,7 @@ def main():
             break
         next_batch = state["batches_done"] + 1
         offset = state["next_source_start"]
-        cmd = [sys.executable, "-u", "-m", "pronounciation.multivsr_batch",
+        cmd = [sys.executable, "-u", "-m", "pronounciation.datasets.multivsr_batch",
                "--source-start", str(offset), "--source-count", str(a.source_count),
                "--candidates", str(a.candidates), "--tracks-per-source", str(a.tracks_per_source),
                "--words-per-track", str(a.words_per_track)]

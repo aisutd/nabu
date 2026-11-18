@@ -5,7 +5,7 @@ import mediapipe as mp
 import numpy as np
 import pandas as pd
 from huggingface_hub import hf_hub_download
-from .config import ALL_LIP_INDICES
+from ..analysis.config import ALL_LIP_INDICES
 from .preprocess_recordings import normalize_landmarks, resample_sequence, MIN_FRAMES, WORD_FRAMES
 
 # Hugging Face dataset

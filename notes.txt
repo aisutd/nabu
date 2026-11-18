@@ -117,38 +117,38 @@ README.md: Vite template documentation.
 pronounciation/ — collection, analysis, and API
 ---------------------------------------------
 __init__.py: Marks the directory as a Python package.
-config.py: Shared lip landmark indices, crop padding, and local model paths.
-detector.py: MouthTracker detects a face, estimates face landmarks, extracts
+analysis/config.py: Shared lip landmark indices, crop padding, and local model paths.
+analysis/detector.py: MouthTracker detects a face, estimates face landmarks, extracts
   40 lip XYZ points in full-frame coordinates, and produces mouth crops/metrics.
-metrics.py: Calculates mouth aperture/stretch/aspect metrics and crop bounds.
-trim.py: Estimates mouth activity and trims idle landmark frames.
-video_input.py: Reads videos into timestamped landmark sequences; FFmpeg
+analysis/metrics.py: Calculates mouth aperture/stretch/aspect metrics and crop bounds.
+analysis/trim.py: Estimates mouth activity and trims idle landmark frames.
+analysis/video_input.py: Reads videos into timestamped landmark sequences; FFmpeg
   converts input audio to 16 kHz mono 16-bit WAV for Whisper.
-transcribe.py: Lazily loads Whisper small.en on CPU; returns word timing and
+analysis/transcribe.py: Lazily loads Whisper small.en on CPU; returns word timing and
   confidence, then checks recognized text against the expected label.
-compare.py: Normalizes mouth geometry, extracts features, aligns sequences
+analysis/compare.py: Normalizes mouth geometry, extracts features, aligns sequences
   with dynamic time warping, generates stage feedback and plots; also a CLI.
-api.py: FastAPI upload/transcription/comparison endpoints, UUID storage,
-  FFmpeg conversion, CORS configuration, processing lock, and /media serving.
-test_webcam.py: Interactive desktop collection entry point; coordinates
+service/api.py: Upload, transcription, and comparison handlers, UUID storage,
+  FFmpeg conversion, and the processing lock. run_backends.py registers routes.
+capture/test_webcam.py: Interactive desktop collection entry point; coordinates
   tracking, audio/video recording, labeling, trimming, saving, and audio checks.
-recorder.py: Appends labeled landmark frames and timestamps to dataset.csv;
+capture/recorder.py: Appends labeled landmark frames and timestamps to dataset.csv;
   allocates integer recording IDs.
-audio_record.py: Captures microphone audio and writes PCM WAV recordings.
-video_record.py: Captures video frames and uses FFmpeg to attach saved audio.
-check_confidence.py: Looks up saved integer recording IDs and checks their
+capture/audio_record.py: Captures microphone audio and writes PCM WAV recordings.
+capture/video_record.py: Captures video frames and uses FFmpeg to attach saved audio.
+capture/check_confidence.py: Looks up saved integer recording IDs and checks their
   audio transcription against the dataset label.
-view_trim.py: Loads CSV recordings and plots activity/trim boundaries.
-test_dataset_video.py: Extracts mouth crops from a prerecorded test clip.
-preprocess_recordings.py: Loads existing raw NPZ recordings, centers/scales
+capture/view_trim.py: Loads CSV recordings and plots activity/trim boundaries.
+datasets/test_dataset_video.py: Extracts mouth crops from a prerecorded test clip.
+datasets/preprocess_recordings.py: Loads existing raw NPZ recordings, centers/scales
   mouth points, and resamples eligible single-word sequences to 29 frames.
-export_csv.py: Exports raw NPZ recordings to CSV; inspect path constants first.
-export_normalized_csv.py: Exports normalized 29-frame NPZ sequences to CSV;
+datasets/export_csv.py: Exports raw NPZ recordings to CSV; inspect path constants first.
+datasets/export_normalized_csv.py: Exports normalized 29-frame NPZ sequences to CSV;
   inspect path constants first.
-huggingFaceTest.py: Reads Hugging Face dataset metadata for inspection.
-test_hug_landmarks.py: Downloads a sample clip/model as configured and previews
+datasets/huggingFaceTest.py: Reads Hugging Face dataset metadata for inspection.
+datasets/test_hug_landmarks.py: Downloads a sample clip/model as configured and previews
   landmark detection; its MODEL default is a Windows-specific path.
-preprocess_hug_landmarks.py: Downloads dataset clips, detects/normalizes lip
+datasets/preprocess_hug_landmarks.py: Downloads dataset clips, detects/normalizes lip
   landmarks, and writes processed NPZ files; supports limits and preview.
 models/face_landmarker.task: MediaPipe face landmark model asset.
 models/blaze_face_full_range.tflite: MediaPipe face detection model asset.
@@ -331,7 +331,7 @@ spoken input. Full integration examples and props are in that folder's README.md
 The practice page now demonstrates visible-reference video, hidden-reference video,
 microphone-only expected-word practice, and free-response audio.
 
-Backend: pronounciation/speaking.py provides POST /speaking/recordings,
+Backend: pronounciation/service/speaking.py provides POST /speaking/recordings,
 POST /speaking/review, and GET /speaking/exercises/{exercise_id}. It reuses the
 existing pronunciation analysis, model, and processing lock. Reference selection
 happens on the server; hiding a reference does not disable analysis.
@@ -441,7 +441,7 @@ with OpenCV window support. Whisper may download its model on first use.
 
 2. RECORD YOUR UTTERANCE
 
-  python -m pronounciation.test_webcam
+  python -m pronounciation.capture.test_webcam
 
 Focus an OpenCV window and press any key except lowercase q to start recording.
 Say the word or phrase with your lips clearly visible. Press the SAME key to stop.
@@ -464,12 +464,12 @@ mismatches manually before using a capture as a reference or training example.
 3. REVIEW A SAVED RECORDING
 
 Replace 29 below with the ID printed during your recording:
-  python -m pronounciation.check_confidence 29
-  python -m pronounciation.view_trim 29
+  python -m pronounciation.capture.check_confidence 29
+  python -m pronounciation.capture.view_trim 29
 
 Multiple IDs can be checked together:
-  python -m pronounciation.check_confidence 28 29 31
-  python -m pronounciation.view_trim 28 29 31
+  python -m pronounciation.capture.check_confidence 28 29 31
+  python -m pronounciation.capture.view_trim 28 29 31
 
 Play the saved video on macOS:
   open pronounciation/test_data/video/recording_29.mp4
@@ -491,10 +491,10 @@ used for visual comparison; use an audiovisual recording for transcription.
 5. COMPARE MOUTH MOVEMENT
 
 Show the supported options:
-  python -m pronounciation.compare --help
+  python -m pronounciation.analysis.compare --help
 
 Run a comparison with the default word-named output:
-  python -m pronounciation.compare \
+  python -m pronounciation.analysis.compare \
     --user pronounciation/test_data/video/recording_29.mp4 \
     --example pronounciation/test_data/video/june.mp4 \
     --word june
@@ -503,7 +503,7 @@ Open the output on macOS:
   open pronounciation/test_data/plots/june.png
 
 For a custom output filename:
-  python -m pronounciation.compare \
+  python -m pronounciation.analysis.compare \
     --user pronounciation/test_data/video/recording_29.mp4 \
     --example pronounciation/test_data/video/june.mp4 \
     --out pronounciation/test_data/comparisons/recording_29.png
@@ -515,7 +515,7 @@ and inspect the plot; interpretation and limitations are in file and roles.txt.
 6. COMPARE AND CHECK THE USER'S AUDIO
 
 Use the matching saved microphone WAV:
-  python -m pronounciation.compare \
+  python -m pronounciation.analysis.compare \
     --user pronounciation/test_data/video/recording_29.mp4 \
     --example pronounciation/test_data/video/june.mp4 \
     --user-wav pronounciation/test_data/audio/recording_29.wav \
@@ -523,7 +523,7 @@ Use the matching saved microphone WAV:
     --out pronounciation/test_data/comparisons/recording_29_audio.png
 
 Alternatively, use audio embedded in the USER video:
-  python -m pronounciation.compare \
+  python -m pronounciation.analysis.compare \
     --user pronounciation/test_data/video/recording_29.mp4 \
     --example pronounciation/test_data/video/june.mp4 \
     --user-wav pronounciation/test_data/video/recording_29.mp4 \
@@ -536,7 +536,7 @@ scratch file pronounciation/test_data/audio/_prepared_user.wav on each audio run
 
 7. OPTIONAL SELF-COMPARISON CHECK
 
-  python -m pronounciation.compare \
+  python -m pronounciation.analysis.compare \
     --user pronounciation/test_data/video/recording_29.mp4 \
     --example pronounciation/test_data/video/recording_29.mp4 \
     --out pronounciation/test_data/comparisons/self_check.png
@@ -581,11 +581,11 @@ when available to identify the utterance. Select an RGB video clip.
 Place it at the test entry point's expected location:
   mkdir -p pronounciation/test_videos
   cp /path/to/extracted/video.mp4 pronounciation/test_videos/sample_clip.mp4
-  python -m pronounciation.test_dataset_video
+  python -m pronounciation.datasets.test_dataset_video
 
 Inspect the images in pronounciation/crops/ for both mouth corners and the full
 lip opening. Use a separate output folder when testing another clip in Python:
-  from pronounciation.test_dataset_video import process_dataset_clip
+  from pronounciation.datasets.test_dataset_video import process_dataset_clip
   log = process_dataset_clip('path/to/clip.mp4', 'pronounciation/crops/my_clip')
 
 To compare a corpus clip with your recording, use its path as --example in
@@ -598,27 +598,27 @@ These commands prepare data; there is no model training command in this folder.
 The current live dataset.csv is not accepted directly by the NPZ preprocessor.
 
 For an existing raw NPZ with the required keys (replace the placeholder path):
-  python -m pronounciation.preprocess_recordings \
+  python -m pronounciation.datasets.preprocess_recordings \
     --input path/to/raw_recording.npz \
     --output-dir pronounciation/test_data/processed_webcam
 
 Before running either exporter, edit its input/output path constants for your
 machine and chosen data directory. Exports overwrite their destination CSV:
-  python -m pronounciation.export_csv
-  python -m pronounciation.export_normalized_csv
+  python -m pronounciation.datasets.export_csv
+  python -m pronounciation.datasets.export_normalized_csv
 
 Inspect Hugging Face metadata:
-  python -m pronounciation.huggingFaceTest
+  python -m pronounciation.datasets.huggingFaceTest
 
 For the Hugging Face commands below, first correct MODEL in each script for
 your machine. Their defaults use Windows-style paths, not the local models/
 path automatically. The preprocessor requires its model file already exists.
 
 Run the landmark diagnostic:
-  python -m pronounciation.test_hug_landmarks
+  python -m pronounciation.datasets.test_hug_landmarks
 
 Prepare one clip with a preview:
-  python -m pronounciation.preprocess_hug_landmarks \
+  python -m pronounciation.datasets.preprocess_hug_landmarks \
     --limit 1 \
     --preview \
     --output-dir pronounciation/test_data/processed_hf_landmarks

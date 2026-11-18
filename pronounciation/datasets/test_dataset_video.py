@@ -3,7 +3,7 @@ import os
 import cv2
 import numpy as np
 
-from pronounciation.detector import MouthTracker
+from pronounciation.analysis.detector import MouthTracker
 
 def process_dataset_clip(video_path: str, output_dir: str = "pronounciation/crops"):
   if not os.path.exists(video_path):

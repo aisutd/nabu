@@ -1,7 +1,7 @@
 import sys
 import csv
 import numpy as np
-from pronounciation.trim import activity, active_range
+from pronounciation.analysis.trim import activity, active_range
 
 DATASET = "pronounciation/test_data/dataset.csv"
 

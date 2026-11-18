@@ -165,7 +165,7 @@ import SpeakingActivity from './components/speaking/SpeakingActivity'
 />
 ```
 
-Server-owned exercise answers are defined in `pronounciation/speaking.py`. Hiding the reference affects presentation, not backend reference selection. Audio-only activities request no camera access. Free-response activities have no expected answer and return `match: null`.
+Server-owned exercise answers are defined in `pronounciation/service/speaking.py`. Hiding the reference affects presentation, not backend reference selection. Audio-only activities request no camera access. Free-response activities have no expected answer and return `match: null`.
 
 The neural path supports isolated-word video clips up to five seconds, with a detectable mouth at every sampled frame. The default single-word video capture stops around 4.5 seconds. Audio-only tasks, sentences, unknown-reference words, and free speech explicitly skip unsupported mouth checks. Failed checks preserve other available results; completion callbacks may contain partial results.
 
@@ -221,8 +221,8 @@ Backend tests cover feedback, partial failures, references, audio normalization,
 Desktop collection requires a camera, microphone, and a graphical environment for OpenCV windows:
 
 ```bash
-python -m pronounciation.test_webcam
-python -m pronounciation.compare --help
+python -m pronounciation.capture.test_webcam
+python -m pronounciation.analysis.compare --help
 ```
 
 The collector saves labeled landmarks, WAV audio, and MP4 video under `pronounciation/test_data/`. Desktop recording IDs are integers; API upload IDs are UUIDs. `check_confidence.py` and `view_trim.py` review collected recordings. FFmpeg converts saved audiovisual recordings to H.264/AAC for browser playback.
@@ -277,7 +277,12 @@ UI/
   src/index.css              Shared theme tokens and typography
   tests/                     Lesson tests
   android/, ios/             Capacitor native projects
-pronounciation/              Speaking API, tracking, analysis, and training tools
+pronounciation/
+  service/                   Pronunciation and speaking handlers and learner feedback
+  analysis/                  Mouth tracking, comparison, transcription, and video input
+  capture/                   Desktop recording and recording review
+  datasets/                  Dataset inspection, preprocessing, and export
+  training/                  Mouth encoder training and checkpoint tools
 handwriting/ocr/             OCR API, error finder, fonts, and separate tester
 tests/                       Python API/workflow tests
 requirements.txt             Python dependencies
