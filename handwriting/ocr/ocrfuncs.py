@@ -22,9 +22,6 @@ def getOcr(lang='en'):
             ocrLocks[lang] = threading.Lock()
         return ocrModels[lang], ocrLocks[lang]
 
-#Load english up front so the first request isn't slow
-getOcr('en')
-
 #Paddle replaces the process's SIGINT/SIGTERM handlers with its own C++ crash logger, which crashes or hangs when a server
 #tries to stop (e.g. uvicorn --reload restarting, or Ctrl+C). This removes Paddle's handlers and re-registers the Python
 #ones (uvicorn's) that Paddle overrode. Must be called from the main thread, after Paddle has been loaded

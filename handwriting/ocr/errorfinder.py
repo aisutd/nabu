@@ -66,7 +66,7 @@ def inkToPoints(ink, size=GRID_SIZE):
     return [(float(left + (x + 0.5) * cellSize), float(top + (y + 0.5) * cellSize)) for y, x in zip(cellYs, cellXs)]
 
 #Returns a font that can draw the given text, chosen by writing system. Falls back to Pillow's default font if the file is missing.
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=128)
 def fontFor(text, size):
     def has(start, end):
         return any(start <= ord(ch) <= end for ch in text)
@@ -179,7 +179,7 @@ def extractPoints(file):
 
 #Converts a text string into a list of points representing the pixels of the rendered text, using a font that covers its writing system.
 #Designed for a single character in mind but should work with more characters as well.
-def extractTextPoints(text, size=GRID_SIZE):
+def renderTextMask(text, size=GRID_SIZE):
     #Render well above the grid size so the glyph shape is accurate before it gets reduced to the grid
     fontSize = size * 4
     font = fontFor(text, fontSize)
@@ -189,8 +189,11 @@ def extractTextPoints(text, size=GRID_SIZE):
     draw = ImageDraw.Draw(img)
     draw.text((fontSize // 2, fontSize // 2), text, font=font, fill=255)
 
-    #Reduce to the same grid as the handwriting so both sides are compared at the same resolution
-    return inkToPoints(np.asarray(img) > 127, size)
+    return img
+
+
+def extractTextPoints(text, size=GRID_SIZE):
+    return inkToPoints(np.asarray(renderTextMask(text, size)) > 127, size)
 
 #Normalizes a list of points to the range [0, 1] and returns the normalized points along with the original bounding box.
 def normalize(data): 

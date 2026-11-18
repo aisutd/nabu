@@ -94,7 +94,7 @@
     <main class="grid gap-6 lg:grid-cols-[3fr_2fr]">
       <section class="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div class="relative aspect-video bg-foreground/90">
-          <img id="camera" src="/stream" alt="Live camera with the detected hand marked" class="size-full object-cover">
+          <img id="camera" src="/asl-api/stream" alt="Live camera with the detected hand marked" class="size-full object-cover">
           <p id="error" class="absolute inset-x-4 bottom-4 hidden rounded-md bg-destructive px-4 py-2 text-sm font-bold text-primary-foreground"></p>
         </div>
         <div class="flex items-center justify-between gap-4 px-5 py-3 text-sm text-muted-foreground">
@@ -201,7 +201,7 @@
 
     async function poll() {
       try {
-        const response = await fetch("/state", { cache: "no-store" });
+        const response = await fetch("/asl-api/state", { cache: "no-store" });
         render(await response.json());
       } catch {
         $("mode").textContent = "Server stopped";
@@ -210,7 +210,7 @@
     }
 
     document.querySelectorAll("[data-command]").forEach((button) => {
-      button.addEventListener("click", () => fetch(`/text/${button.dataset.command}`, { method: "POST" }));
+      button.addEventListener("click", () => fetch(`/asl-api/text/${button.dataset.command}`, { method: "POST" }));
     });
     poll();
   </script>
