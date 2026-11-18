@@ -2,7 +2,8 @@ PRONOUNCIATION: FILES, ROLES, DATA CONTRACTS, AND COMPLETE PIPELINE GUIDE
 ====================================================================
 Source and local artifact review: October 28, 2026.
 All paths below are relative to the repository root unless stated otherwise.
-The actual package spelling is pronounciation; commands must use that spelling.
+The package is spelled pronounciation. Source files are grouped into service/,
+analysis/, capture/, datasets/, and training/. See the repository map in README.md.
 
 PURPOSE AND ACCURACY BOUNDARIES
 -------------------------------
@@ -839,48 +840,48 @@ Local camera/microphone permissions and GUI support are needed for live scripts.
 Remote metadata/video/model fetches need network access and available caches.
 
 Live collection:
-  python -m pronounciation.test_webcam
+  python -m pronounciation.capture.test_webcam
 
 Standalone microphone diagnostic (edit its output path on macOS/Linux first):
-  python -m pronounciation.audio_record
+  python -m pronounciation.capture.audio_record
 
 Review saved labels/audio and retained motion:
-  python -m pronounciation.check_confidence 28 29 31
-  python -m pronounciation.view_trim 28 29 31
+  python -m pronounciation.capture.check_confidence 28 29 31
+  python -m pronounciation.capture.view_trim 28 29 31
 
 Compare local files (typed label is not a verified audio annotation):
-  python -m pronounciation.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/june.mp4 --word june
+  python -m pronounciation.analysis.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/june.mp4 --word june
   Expected plot path: pronounciation/test_data/plots/june.png
 
 Also check USER audio from its WAV; no reference audio is required:
-  python -m pronounciation.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/june.mp4 --user-wav pronounciation/test_data/audio/recording_29.wav --word june --out pronounciation/test_data/plots/june_audio.png
+  python -m pronounciation.analysis.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/june.mp4 --user-wav pronounciation/test_data/audio/recording_29.wav --word june --out pronounciation/test_data/plots/june_audio.png
 
 Geometric self-comparison diagnostic (expected very small error for deterministic
 matching detections; this documentation did not execute inference):
-  python -m pronounciation.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/recording_29.mp4 --out pronounciation/test_data/plots/self_check.png
+  python -m pronounciation.analysis.compare --user pronounciation/test_data/video/recording_29.mp4 --example pronounciation/test_data/video/recording_29.mp4 --out pronounciation/test_data/plots/self_check.png
 
 Run API and use its generated interactive schema:
-  python -m uvicorn pronounciation.api:app
+  python run_backends.py
   Open http://127.0.0.1:8000/docs
   Upload each MP4 with POST /recordings, then use the returned UUIDs for comparison.
   Supply scalar label/IDs as query parameters as shown by the generated docs.
 
 Inspect arbitrary local video from Python:
-  from pronounciation.test_dataset_video import process_dataset_clip
+  from pronounciation.datasets.test_dataset_video import process_dataset_clip
   log = process_dataset_clip('path/to/clip.mp4', 'pronounciation/crops/my_clip')
   This returns a log; saving the log to disk is the caller's responsibility.
 
 NPZ preparation (placeholder input must already exist with the stated keys):
-  python -m pronounciation.preprocess_recordings --input path/to/raw_recording.npz --output-dir pronounciation/test_data/processed_webcam
+  python -m pronounciation.datasets.preprocess_recordings --input path/to/raw_recording.npz --output-dir pronounciation/test_data/processed_webcam
   To export that directory, set export_normalized_csv.PROCESSED_DIR and OUTPUT_FILE
   appropriately in code before running its module. Current defaults do not follow
   this override automatically. To export raw NPZs use export_csv with its own
   input/output constants; it overwrites output even when no inputs are found.
 
 Hugging Face metadata and direct-landmark preparation:
-  python -m pronounciation.huggingFaceTest
-  python -m pronounciation.test_hug_landmarks
-  python -m pronounciation.preprocess_hug_landmarks --limit 1 --preview --output-dir pronounciation/test_data/processed_hf_landmarks
+  python -m pronounciation.datasets.huggingFaceTest
+  python -m pronounciation.datasets.test_hug_landmarks
+  python -m pronounciation.datasets.preprocess_hug_landmarks --limit 1 --preview --output-dir pronounciation/test_data/processed_hf_landmarks
   Correct the hardcoded MODEL paths before using these on this machine. --limit 0
   attempts all metadata rows and may download/process substantial data.
 

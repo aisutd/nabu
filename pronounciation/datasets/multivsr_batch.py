@@ -15,7 +15,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .config import ALL_LIP_INDICES
+from ..analysis.config import ALL_LIP_INDICES
 from .preprocess_recordings import normalize_landmarks, resample_sequence
 
 ROOT = Path(r"C:\NabuData\MultiVSR")

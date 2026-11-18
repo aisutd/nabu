@@ -41,7 +41,7 @@ Options:
 
 - `expectedText`: optional expected word/sentence for standalone practice.
 - `exerciseId`: resolves the expected answer from `EXERCISES` in
-  `pronounciation/speaking.py`. Unknown exercise IDs fail rather than falling
+  `pronounciation/service/speaking.py`. Unknown exercise IDs fail rather than falling
   back to a browser-provided answer. Replace this registry with a lesson DB later.
 - `capture`: `audio` or `video`; defaults to video unless an exercise specifies it.
 - `showReference`: controls visibility only. The server still selects a reference

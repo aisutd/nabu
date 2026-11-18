@@ -15,8 +15,8 @@ from fastapi.staticfiles import StaticFiles
 
 from asl.live_demo import PAGE, STREAM_FRAME_SECONDS, create_demo
 from handwriting.ocr import api as handwriting
-from pronounciation import api as mouth
-from pronounciation.speaking import create_speaking_handlers
+from pronounciation.service import api as mouth
+from pronounciation.service.speaking import create_speaking_handlers
 
 ROOT = Path(__file__).resolve().parent
 

@@ -1,6 +1,6 @@
 import sys
 import csv
-from pronounciation.transcribe import transcribe
+from pronounciation.analysis.transcribe import transcribe
 
 DATASET = "pronounciation/test_data/dataset.csv"
 AUDIO = "pronounciation/test_data/audio/recording_{}.wav"

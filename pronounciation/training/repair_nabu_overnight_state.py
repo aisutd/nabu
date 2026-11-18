@@ -71,7 +71,7 @@ def main():
         print(f"[STOP] Expected exactly one matching state JSON; found {len(found)}.")
         for path, _ in found:
             print(f"  {path}")
-        print("No files changed. Check the state filename inside pronounciation\\overnight_multivsr.py.")
+        print("No files changed. Check the state filename inside pronounciation\\training\\overnight_multivsr.py.")
         return 1
 
     state_path, state = found[0]

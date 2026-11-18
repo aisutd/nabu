@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 import numpy as np
-from .config import ALL_LIP_INDICES, UPPER_INNER_LIP, LOWER_INNER_LIP, CORNER_LEFT_LIP, CORNER_RIGHT_LIP
+from ..analysis.config import ALL_LIP_INDICES, UPPER_INNER_LIP, LOWER_INNER_LIP, CORNER_LEFT_LIP, CORNER_RIGHT_LIP
 
 
 # Find positions of the 40 saved mouth landmarks from MediaPipe
@@ -17,7 +17,7 @@ LOWER = SAVED_INDEX[LOWER_INNER_LIP]
 
 
 # Location of saved webcam recordings
-RECORDINGS_DIR = Path(__file__).resolve().parent / "test_data" / "recordings"
+RECORDINGS_DIR = Path(__file__).resolve().parents[1] / "test_data" / "recordings"
 
 # Location where processed recordings will be saved
 PROCESSED_DIR = Path(r"C:\NabuData\processed_webcam")

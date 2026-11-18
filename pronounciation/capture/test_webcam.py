@@ -1,5 +1,5 @@
 # For testing live input from the webcam, with automatic Nabu neural API inference.
-from pronounciation.transcribe import check
+from pronounciation.analysis.transcribe import check
 from pathlib import Path
 import json
 import time
@@ -9,11 +9,11 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from pronounciation.detector import MouthTracker
-from pronounciation.recorder import save_recording
-from pronounciation.audio_record import AudioRecorder
-from pronounciation.trim import trim_idle
-from pronounciation.video_record import VideoRecorder, add_audio
+from pronounciation.analysis.detector import MouthTracker
+from pronounciation.capture.recorder import save_recording
+from pronounciation.capture.audio_record import AudioRecorder
+from pronounciation.analysis.trim import trim_idle
+from pronounciation.capture.video_record import VideoRecorder, add_audio
 
 # From Krish's recommendation of 30 frame target.
 MIN_FRAMES = 30

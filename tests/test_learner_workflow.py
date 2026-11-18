@@ -6,8 +6,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from pronounciation import api
-from pronounciation.learner_feedback import learner_feedback
+from pronounciation.service import api
+from pronounciation.service.learner_feedback import learner_feedback
 
 
 class LearnerWorkflowTests(unittest.TestCase):

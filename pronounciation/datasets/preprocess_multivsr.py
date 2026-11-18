@@ -4,9 +4,9 @@ This script does NOT download YouTube videos or the 42-GB MultiVSR archive.
 The Hugging Face CSVs contain metadata / frame ranges, NOT video pixels.
 
 From the Nabu repository root:
-  python -m pronounciation.preprocess_multivsr inspect --metadata train_minor.csv
-  python -m pronounciation.preprocess_multivsr video --file path/to/sample.mp4 --label "sample utterance" --preview
-  python -m pronounciation.preprocess_multivsr csv --csv path/to/train_minor.csv --video-root path/to/extracted/clips --limit 20
+  python -m pronounciation.datasets.preprocess_multivsr inspect --metadata train_minor.csv
+  python -m pronounciation.datasets.preprocess_multivsr video --file path/to/sample.mp4 --label "sample utterance" --preview
+  python -m pronounciation.datasets.preprocess_multivsr csv --csv path/to/train_minor.csv --video-root path/to/extracted/clips --limit 20
 
 Output is compatible with Nabu's landmark-based contrastive encoder, but a
 MultiVSR row can be a SENTENCE. Downsampling whole sentences to 29 frames is
@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 import cv2
 import numpy as np
 
-from .config import ALL_LIP_INDICES
+from ..analysis.config import ALL_LIP_INDICES
 from .preprocess_recordings import normalize_landmarks, resample_sequence, MIN_FRAMES, WORD_FRAMES
 
 REPO_ID = "sindhuhegde/multivsr"
