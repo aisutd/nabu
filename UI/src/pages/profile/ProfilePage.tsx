@@ -104,8 +104,13 @@ export default function ProfilePage() {
     <div className="space-y-6 pb-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Profile</h1><p className="mt-2 text-muted-foreground">See your practice progress and manage your profile on this device.</p></div>
-        <button type="button" aria-expanded={showAccount} aria-controls="profile-account" onClick={() => setShowAccount((open) => !open)}
-          className="min-h-11 rounded-lg border bg-card px-4 text-sm font-bold hover:bg-secondary">Manage profile</button>
+        <div className="flex items-center gap-2">
+          <button type="button" aria-expanded={showAccount} aria-controls="profile-account" onClick={() => setShowAccount((open) => !open)}
+            className="min-h-11 rounded-lg border bg-card px-4 text-sm font-bold hover:bg-secondary">Manage profile</button>
+          <a href="#/settings" aria-label="Settings" title="Settings" className="grid size-24 place-items-center rounded-xl text-6xl leading-none text-neutral-700 hover:bg-neutral-500/15 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2">
+            <span aria-hidden="true">⚙︎</span>
+          </a>
+        </div>
       </header>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {counts.map(({ label, value }) => <div key={label} className={card}><dt className="text-xs font-bold text-muted-foreground sm:text-sm">{label}</dt><dd className="mt-1 font-heading text-3xl text-primary">{value}</dd></div>)}
@@ -132,12 +137,7 @@ export default function ProfilePage() {
             </ul> : <p className="mt-2 text-sm text-muted-foreground">Practice a speaking lesson or record a word in the <a href="#/pronunciation" className="font-bold text-primary underline">Pronunciation Studio</a> to add it here.</p>}
           </section>
         </div>
-        <div className="grid gap-4">
-          <PracticeCalendar activity={activity} today={today} />
-          <a href="#/settings" aria-label="Settings" title="Settings" className="grid size-24 place-items-center justify-self-end rounded-xl text-6xl leading-none text-neutral-700 hover:bg-neutral-500/15 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2">
-            <span aria-hidden="true">⚙︎</span>
-          </a>
-        </div>
+        <PracticeCalendar activity={activity} today={today} />
       </div>
       <div ref={accountPanel} id="profile-account" hidden={!showAccount}>
         <AccountDetails preferences={preferences} />
