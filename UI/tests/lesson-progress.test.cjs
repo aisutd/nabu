@@ -93,12 +93,15 @@ test('signing continues only when the recognizer matches the requested letter', 
   assert.equal(progress.advanceProgress({ cursor: 0, completed: false, attempts: [matching] }, lesson).cursor, 1)
 })
 
-test('handwriting requires a saved review but has no similarity cutoff', () => {
+test('handwriting requires a saved review that meets the shape goal', () => {
   const lesson = data.lessons.find((item) => item.id === 'write-it-down')
   const question = lesson.questions[0]
-  const reviewed = attempt(question.id, { answer: question.letter, answerIds: [], correct: null, handwriting: { similarity: 12 } })
+  const reviewed = attempt(question.id, { answer: question.letter, answerIds: [], correct: null, handwriting: { similarity: 90 } })
   assert.equal(progress.canContinueQuestion(question, reviewed), true)
   assert.equal(progress.canContinueQuestion(question, { ...reviewed, handwriting: undefined }), false)
+  const belowGoal = { ...reviewed, handwriting: { similarity: 89 } }
+  assert.equal(progress.canContinueQuestion(question, belowGoal), false)
+  assert.equal(progress.advanceProgress({ cursor: 0, completed: false, attempts: [belowGoal] }, lesson).cursor, 0)
   assert.equal(progress.canContinueQuestion(question, { ...reviewed, handwriting: { similarity: 105 } }), false)
   const saved = { [lesson.id]: { cursor: 0, completed: false, attempts: [reviewed] } }
   const restored = progress.parseProgress(JSON.stringify(saved))[lesson.id]

@@ -24,6 +24,7 @@ export type Attempt = {
 export type LessonProgress = { cursor: number; completed: boolean; attempts: Attempt[] }
 export type ProgressMap = Record<string, LessonProgress>
 export const progressKey = 'nabu.english-lessons.v1'
+export const handwritingPassScore = 90
 export const emptyProgress = (): LessonProgress => ({ cursor: 0, completed: false, attempts: [] })
 
 export function parseProgress(raw: string | null): ProgressMap {
@@ -46,7 +47,7 @@ export function canContinueQuestion(question: Question, attempt?: Attempt | null
   if (!attempt || attempt.skipped || attempt.questionId !== question.id) return false
   if (question.kind === 'handwriting') {
     const score = attempt.handwriting?.similarity
-    return typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 100 && attempt.answer === question.letter
+    return typeof score === 'number' && score >= handwritingPassScore && score <= 100 && attempt.answer === question.letter
   }
   if (question.kind === 'signing') return attempt.correct === true && attempt.answer === question.letter
   if (question.kind !== 'speaking') return attempt.correct === true
