@@ -14,7 +14,7 @@ Nabu is a language-learning prototype with English lessons, reusable speaking ac
 | Handwriting tools | Separate FastAPI image-upload endpoints for PaddleOCR text recognition and geometric handwriting error detection, plus a browser tester. |
 | Native projects | Capacitor Android and iOS wrappers for the built web app. |
 
-The React ASL and Handwriting tabs connect to separate local services. The corresponding lesson activities and the Profile and Settings pages are placeholders. There is no account authentication, database-backed learner history, or cross-device progress sync yet.
+The ASL and Handwriting tools use the unified backend. The “Sign it” and “Write it down” lessons use the same ASL recognition and handwriting review endpoints. Learn and Profile show progress stored in the current browser, and Settings saves preferences locally. Profile account controls are a demonstration. There is no account authentication, database-backed learner history, or cross-device progress sync yet.
 
 **Model interpretation:** the neural encoder returns experimental embedding similarity, not pronunciation accuracy or a percentage. Transcription matches indicate recognized words matched the prompt; they do not establish phonetic accuracy. Lesson completion is not a validated pronunciation grade.
 

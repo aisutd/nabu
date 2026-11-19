@@ -3,6 +3,8 @@ export type Question =
   | { id: string; kind: 'choice'; prompt: string; context?: string; picture?: 'apple' | 'back' | 'calendar'; options: Option[]; answer: string; explanation: string }
   | { id: string; kind: 'sentence'; prompt: string; tokens: Option[]; order: string[]; explanation: string }
   | { id: string; kind: 'speaking'; prompt: string; exerciseId: string; word: string; showReference: boolean }
+  | { id: string; kind: 'handwriting'; prompt: string; letter: string }
+  | { id: string; kind: 'signing'; prompt: string; letter: string; cue: string }
 
 export type Lesson = {
   id: string
@@ -56,13 +58,17 @@ export const lessons: Lesson[] = [
     ],
   },
   {
-    id: 'write-it-down', title: 'Write it down', category: 'Handwriting', symbol: '05', duration: 'Coming soon', status: 'coming-soon', questions: [],
-    description: 'A place to practice writing the words you have learned.',
-    preview: 'You will write words such as “back” and “June” on a canvas. Handwriting input and feedback are not connected yet. This preview does not count as a completed lesson.',
+    id: 'write-it-down', title: 'Write it down', category: 'Handwriting', symbol: '05', duration: '3 min', status: 'ready',
+    description: 'Write the letters in “bad” and review each shape against its reference.',
+    questions: ['b', 'a', 'd'].map((letter) => ({ id: `write-${letter}`, kind: 'handwriting', letter, prompt: `Write lowercase “${letter}”.` })),
   },
   {
-    id: 'sign-it', title: 'Sign it', category: 'Sign language · ASL', symbol: '06', duration: 'Coming soon', status: 'coming-soon', questions: [],
-    description: 'Explore another way to communicate.',
-    preview: 'An ASL activity will appear here when the sign-language module is ready. ASL is a language with its own grammar; this placeholder does not teach or assess signs and cannot be completed.',
+    id: 'sign-it', title: 'Sign it', category: 'Sign language · ASL', symbol: '06', duration: '3 min', status: 'ready',
+    description: 'Fingerspell the letters in “bad” using the live ASL recognizer.',
+    questions: [
+      { id: 'sign-b', kind: 'signing', letter: 'B', prompt: 'Fingerspell the letter B.', cue: 'Hold four fingers straight and together, with your thumb across your palm.' },
+      { id: 'sign-a', kind: 'signing', letter: 'A', prompt: 'Fingerspell the letter A.', cue: 'Make a fist and rest your thumb alongside your index finger.' },
+      { id: 'sign-d', kind: 'signing', letter: 'D', prompt: 'Fingerspell the letter D.', cue: 'Point your index finger up and touch your other fingertips to your thumb.' },
+    ],
   },
 ]

@@ -5,6 +5,7 @@ import type { Attempt } from '../../data/lesson_progress'
 import type { SpeakingResult } from '../../api/speaking'
 import SpeakingActivity from '../speaking/SpeakingActivity'
 import LessonPicture from './LessonPicture'
+import { HandwritingPractice, SigningPractice } from './LetterPractice'
 import NabuFailAnimation from '../feedback/NabuFailAnimation'
 
 const primary = 'min-h-12 rounded-lg bg-primary px-6 py-3 font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40'
@@ -24,7 +25,8 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
   const [attempt, setAttempt] = useState<Attempt | null>(previous ?? null)
   const [busy, setBusy] = useState(false)
   const [failPlay, setFailPlay] = useState<number | null>(null)
-  const checked = question.kind !== 'speaking' && attempt !== null && !attempt.skipped
+  const knowledgeQuestion = question.kind === 'choice' || question.kind === 'sentence'
+  const checked = knowledgeQuestion && attempt !== null && !attempt.skipped
   const ready = canContinueQuestion(question, attempt)
 
   const reportBusy = useCallback((value: boolean) => {
@@ -37,7 +39,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
   }
 
   function checkAnswer() {
-    if (question.kind === 'speaking' || checked) return
+    if ((question.kind !== 'choice' && question.kind !== 'sentence') || checked) return
     const correct = question.kind === 'choice' ? selected[0] === question.answer : selected.join('|') === question.order.join('|')
     const options = question.kind === 'choice' ? question.options : question.tokens
     const text = selected.map((id) => options.find((option) => option.id === id)?.text ?? '').join(' ').replace(/\s+([.,!?])/g, '$1')
@@ -59,6 +61,24 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
     onAttempt(next)
   }
 
+  function checkSign(letter: string) {
+    if (question.kind !== 'signing') return
+    const next = makeAttempt([], letter, letter === question.letter)
+    setAttempt(next)
+    onAttempt(next)
+  }
+
+  function reviewHandwriting(similarity: number) {
+    if (question.kind !== 'handwriting') return
+    const next = { ...makeAttempt([], question.letter, null), handwriting: { similarity } }
+    setAttempt(next)
+    onAttempt(next)
+  }
+
+  const continueHint = question.kind === 'speaking' ? `The recognized word must match “${question.word}” to enable Continue.`
+    : question.kind === 'signing' ? `Check a recognized ${question.letter} to continue.`
+    : 'Review a handwriting sample to continue.'
+
   return (
     <div>
       {failPlay !== null && <NabuFailAnimation key={failPlay} onDone={() => setFailPlay(null)} />}
@@ -68,6 +88,21 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
           <SpeakingActivity exerciseId={question.exerciseId} capture="video" showReference={question.showReference}
             onComplete={speakingComplete} onAttemptReset={() => setAttempt(null)} onBusyChange={reportBusy} />
           {previous?.speaking?.hasResult && !busy && attempt === previous && <p className="mt-4 text-sm text-muted-foreground">{ready ? 'Your matching attempt is saved. Continue or record a new one.' : `Your last attempt did not confirm “${question.word}”. Record and review again.`}</p>}
+        </>
+      ) : question.kind === 'signing' ? (
+        <>
+          <SigningPractice question={question} onCheck={checkSign} />
+          {attempt && <p role="status" className="mt-4 rounded-lg bg-secondary p-4 text-sm">
+            {ready ? `The recognizer matched ${question.letter}. You can continue.` : `The recognizer saw ${attempt.answer}. Try ${question.letter} again.`}
+          </p>}
+        </>
+      ) : question.kind === 'handwriting' ? (
+        <>
+          <HandwritingPractice question={question} onReview={reviewHandwriting} onReset={() => setAttempt(null)} onBusyChange={reportBusy} />
+          {ready && <div role="status" className="mt-4 rounded-lg bg-secondary p-4 text-sm">
+            <strong>{attempt?.handwriting?.similarity}% shape similarity</strong>
+            <p className="mt-1">Your review is saved. Try another sample or continue.</p>
+          </div>}
         </>
       ) : (
         <section className="rounded-xl border bg-card p-5 shadow-card sm:p-8">
@@ -99,13 +134,13 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
         </section>
       )}
       <footer className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        {question.kind === 'speaking' ? (
+        {!knowledgeQuestion ? (
           <div>
             <button type="button" disabled={busy} onClick={() => onSkip(makeAttempt([], '', null, true))} className="min-h-11 px-2 text-sm text-muted-foreground underline underline-offset-4 disabled:opacity-40">Skip this question</button>
-            {!ready && <p className="text-xs text-muted-foreground">The recognized word must match “{question.word}” to enable Continue.</p>}
+            {!ready && <p className="text-xs text-muted-foreground">{continueHint}</p>}
           </div>
         ) : <span className="text-xs text-muted-foreground">Take your time. Retries are welcome.</span>}
-        {question.kind === 'speaking' ? <button type="button" disabled={busy || !ready} onClick={onAdvance} className={primary}>Continue →</button>
+        {!knowledgeQuestion ? <button type="button" disabled={busy || !ready} onClick={onAdvance} className={primary}>Continue →</button>
           : ready ? <button type="button" disabled={busy} onClick={onAdvance} className={primary}>Continue →</button>
 
           : checked ? <button type="button" onClick={() => { setAttempt(null); setSelected([]) }} className={primary}>Try again</button>
