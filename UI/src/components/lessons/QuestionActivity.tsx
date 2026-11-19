@@ -10,6 +10,11 @@ import NabuFailAnimation from '../feedback/NabuFailAnimation'
 
 const primary = 'min-h-12 rounded-lg bg-primary px-6 py-3 font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40'
 const secondary = 'min-h-11 rounded-lg border bg-card px-4 py-2 text-sm font-bold hover:bg-secondary disabled:opacity-40'
+const handwritingRetryThreshold = 90
+
+function needsHandwritingRetry(similarity: number) {
+  return similarity < handwritingRetryThreshold
+}
 
 type Props = {
   question: Question
@@ -66,6 +71,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
     const next = makeAttempt([], letter, letter === question.letter)
     setAttempt(next)
     onAttempt(next)
+    if (!next.correct) setFailPlay(Date.now())
   }
 
   function reviewHandwriting(similarity: number) {
@@ -73,8 +79,11 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
     const next = { ...makeAttempt([], question.letter, null), handwriting: { similarity } }
     setAttempt(next)
     onAttempt(next)
+    if (needsHandwritingRetry(similarity)) setFailPlay(Date.now())
   }
 
+  const handwritingSimilarity = attempt?.handwriting?.similarity
+  const handwritingNeedsRetry = typeof handwritingSimilarity === 'number' && needsHandwritingRetry(handwritingSimilarity)
   const continueHint = question.kind === 'speaking' ? `The recognized word must match “${question.word}” to enable Continue.`
     : question.kind === 'signing' ? `Check a recognized ${question.letter} to continue.`
     : 'Review a handwriting sample to continue.'
@@ -99,9 +108,11 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
       ) : question.kind === 'handwriting' ? (
         <>
           <HandwritingPractice question={question} onReview={reviewHandwriting} onReset={() => setAttempt(null)} onBusyChange={reportBusy} />
-          {ready && <div role="status" className="mt-4 rounded-lg bg-secondary p-4 text-sm">
-            <strong>{attempt?.handwriting?.similarity}% shape similarity</strong>
-            <p className="mt-1">Your review is saved. Try another sample or continue.</p>
+          {ready && <div role="status" className={`mt-4 rounded-lg p-4 text-sm ${handwritingNeedsRetry ? 'bg-warning/20' : 'bg-secondary'}`}>
+            <strong>{handwritingSimilarity}% shape similarity</strong>
+            <p className="mt-1">{handwritingNeedsRetry
+              ? 'The shape differs from the reference. Try another sample or continue.'
+              : 'Your review is saved. Try another sample or continue.'}</p>
           </div>}
         </>
       ) : (

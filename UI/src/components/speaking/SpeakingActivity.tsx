@@ -7,6 +7,7 @@ import useSpeakingActivity from '../../hooks/use_speaking_activity'
 import VideoRecorder from '../VideoRecorder'
 import RecordingPreview from './recording_preview'
 import SpeakingResults from './speaking_results'
+import NabuFailAnimation from '../feedback/NabuFailAnimation'
 
 export type SpeakingActivityProps = {
   exerciseId?: string
@@ -39,6 +40,7 @@ function SpeakingSession({
   const reference = providedReference === undefined ? fetchedReference : providedReference
   const hasReferencePanel = showReference && Boolean(reference || referencePlaceholder)
   const [referenceError, setReferenceError] = useState('')
+  const [failPlay, setFailPlay] = useState<number | null>(null)
   useEffect(() => {
     if (!showReference || !word || providedReference !== undefined) return
     const controller = new AbortController()
@@ -58,22 +60,28 @@ function SpeakingSession({
   const duration = maxDurationMs ?? (capture === 'video' && expectedText?.trim().split(/\s+/).length === 1 ? 4500 : 30000)
 
   function changeRecording(file: File | null) {
+    setFailPlay(null)
     activity.changeRecording(file)
     onAttemptReset?.()
   }
 
   function retry() {
+    setFailPlay(null)
     activity.retry()
     onAttemptReset?.()
   }
 
   async function review() {
     const result = await activity.review()
-    if (result) onComplete?.(result)
+    if (result) {
+      setFailPlay(result.transcription?.match === false ? Date.now() : null)
+      onComplete?.(result)
+    }
   }
 
   return (
     <section aria-label="Speaking activity" className="min-w-0 [overflow-wrap:anywhere]">
+      {failPlay !== null && <NabuFailAnimation key={failPlay} onDone={() => setFailPlay(null)} />}
       {showHeading && <h2 className="mb-5 text-2xl font-medium">{expectedText && showExpectedText ? `Say “${expectedText}”` : 'Your response'}</h2>}
       {referenceError && <p className="mb-4 text-sm text-muted-foreground">{referenceError}</p>}
       <div className={`grid min-w-0 grid-cols-1 gap-4 md:gap-6 ${hasReferencePanel ? 'md:grid-cols-2' : ''}`}>
