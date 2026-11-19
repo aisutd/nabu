@@ -10,6 +10,7 @@ export type Attempt = {
   correct: boolean | null
   skipped: boolean
   createdAt: string
+  handwriting?: { similarity: number }
   speaking?: {
     recordingId: string
     heard: string | null
@@ -43,6 +44,11 @@ export function parseProgress(raw: string | null): ProgressMap {
 
 export function canContinueQuestion(question: Question, attempt?: Attempt | null): boolean {
   if (!attempt || attempt.skipped || attempt.questionId !== question.id) return false
+  if (question.kind === 'handwriting') {
+    const score = attempt.handwriting?.similarity
+    return typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 100 && attempt.answer === question.letter
+  }
+  if (question.kind === 'signing') return attempt.correct === true && attempt.answer === question.letter
   if (question.kind !== 'speaking') return attempt.correct === true
   const speech = attempt.speaking
   const expected = question.word.trim().toLowerCase()
@@ -55,7 +61,7 @@ export function advanceProgress(progress: LessonProgress, lesson: Lesson, allowS
   const question = lesson.questions[progress.cursor]
   const latest = progress.attempts.filter((attempt) => attempt.questionId === question?.id).at(-1)
   if (!question) return progress
-  const explicitlySkipped = allowSkip && question.kind === 'speaking' && latest?.skipped === true
+  const explicitlySkipped = allowSkip && (question.kind === 'speaking' || question.kind === 'signing' || question.kind === 'handwriting') && latest?.skipped === true
   if (!explicitlySkipped && !canContinueQuestion(question, latest)) return progress
   const cursor = Math.min(progress.cursor + 1, lesson.questions.length)
   return { ...progress, cursor, completed: cursor === lesson.questions.length }

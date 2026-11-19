@@ -13,7 +13,7 @@ export default function LessonSummary({ lesson, progress, onRestart }: { lesson:
     <dl className="mt-7 grid gap-3 sm:grid-cols-3">
       {[['Questions reviewed', summary.reviewed], ['Attempts made', summary.attempts], ['Questions skipped', summary.skipped]].map(([label, value]) => <div key={label} className="rounded-lg bg-secondary p-4"><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-2 font-heading text-3xl">{value}</dd></div>)}
     </dl>
-    <p className="mt-4 text-xs text-muted-foreground">Completion records participation, not a pronunciation accuracy score.</p>
+    <p className="mt-4 text-xs text-muted-foreground">Completion records participation in this lesson.</p>
     <div className="mt-7 flex flex-wrap gap-3">
       {next && <a href={`#/lesson/${next.id}`} className="inline-flex min-h-12 items-center rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground">Next lesson →</a>}
       <a href="#/lesson" className="inline-flex min-h-12 items-center rounded-lg border px-5 py-3 font-bold hover:bg-secondary">Back to lessons</a>

@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import Sidebar from '../sidebar/Sidebar'
+import useLearnerPreferences from '../../hooks/use_learner_preferences'
 import type { PageId } from '../sidebar/sidebar_items'
 
 type Props = { currentPage: PageId; children: ReactNode }
 
 export default function AppLayout({ currentPage, children }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { largerText, reducedMotion } = useLearnerPreferences()
+  const respectsPreferences = currentPage === 'home' || currentPage === 'lesson' || currentPage === 'profile' || currentPage === 'settings'
   return (
     <div className="min-h-dvh bg-background text-foreground md:flex">
       <a href="#page-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-card focus:p-3">Skip to content</a>
@@ -19,7 +22,7 @@ export default function AppLayout({ currentPage, children }: Props) {
       </header>
       <Sidebar currentPage={currentPage} open={menuOpen} onNavigate={() => setMenuOpen(false)} />
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-8 [overflow-wrap:anywhere] sm:px-6 md:p-10">
-        <div className={`mx-auto ${currentPage === 'handwriting' ? 'max-w-7xl' : 'max-w-5xl'}`}>{children}</div>
+        <div className={`mx-auto ${currentPage === 'handwriting' ? 'max-w-7xl' : 'max-w-5xl'}${respectsPreferences && largerText ? ' learner-larger-text' : ''}${respectsPreferences && reducedMotion ? ' learner-reduced-motion' : ''}`}>{children}</div>
       </main>
     </div>
   )

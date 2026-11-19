@@ -24,7 +24,7 @@ test('malformed and out-of-range stored progress is discarded', () => {
     assert.deepEqual(plain(progress.parseProgress(raw)), {})
   }
 })
-test('coming-soon lessons never restore completion', () => {
+test('a legacy preview record does not restore completion for a now-playable lesson', () => {
   assert.deepEqual(plain(progress.parseProgress(JSON.stringify({ 'write-it-down': { cursor: 0, completed: true, attempts: [] } }))), {})
 })
 test('resume retains attempts and cursor while filtering invalid question IDs', () => {
@@ -79,4 +79,38 @@ test('explicit speaking skip advances without enabling normal Continue', () => {
   const skipped = progress.advanceProgress(state, lesson, true)
   assert.equal(skipped.cursor, 1)
   assert.equal(progress.lessonSummary(skipped, lesson).skipped, 1)
+})
+
+
+test('signing continues only when the recognizer matches the requested letter', () => {
+  const lesson = data.lessons.find((item) => item.id === 'sign-it')
+  const question = lesson.questions[0]
+  const matching = attempt(question.id, { answer: question.letter, answerIds: [] })
+  const mismatch = { ...matching, answer: 'C', correct: false }
+  assert.equal(progress.canContinueQuestion(question, matching), true)
+  assert.equal(progress.canContinueQuestion(question, mismatch), false)
+  assert.equal(progress.canContinueQuestion(question, { ...mismatch, correct: true }), false)
+  assert.equal(progress.advanceProgress({ cursor: 0, completed: false, attempts: [matching] }, lesson).cursor, 1)
+})
+
+test('handwriting requires a saved review but has no similarity cutoff', () => {
+  const lesson = data.lessons.find((item) => item.id === 'write-it-down')
+  const question = lesson.questions[0]
+  const reviewed = attempt(question.id, { answer: question.letter, answerIds: [], correct: null, handwriting: { similarity: 12 } })
+  assert.equal(progress.canContinueQuestion(question, reviewed), true)
+  assert.equal(progress.canContinueQuestion(question, { ...reviewed, handwriting: undefined }), false)
+  assert.equal(progress.canContinueQuestion(question, { ...reviewed, handwriting: { similarity: 105 } }), false)
+  const saved = { [lesson.id]: { cursor: 0, completed: false, attempts: [reviewed] } }
+  const restored = progress.parseProgress(JSON.stringify(saved))[lesson.id]
+  assert.equal(progress.advanceProgress(restored, lesson).cursor, 1)
+})
+
+test('signing and handwriting can be explicitly skipped', () => {
+  for (const id of ['sign-it', 'write-it-down']) {
+    const lesson = data.lessons.find((item) => item.id === id)
+    const skipped = attempt(lesson.questions[0].id, { answer: '', answerIds: [], correct: null, skipped: true })
+    const state = { cursor: 0, completed: false, attempts: [skipped] }
+    assert.equal(progress.advanceProgress(state, lesson).cursor, 0)
+    assert.equal(progress.advanceProgress(state, lesson, true).cursor, 1)
+  }
 })
