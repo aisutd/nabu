@@ -13,26 +13,34 @@ export type SpeakingActivityProps = {
   expectedText?: string
   capture?: CaptureMode
   showReference?: boolean
+  reference?: PracticeWord | null
+  referencePlaceholder?: string
   showExpectedText?: boolean
+  showHeading?: boolean
   showAnalysis?: boolean
   maxDurationMs?: number
   onComplete?: (result: SpeakingResult) => void
   onAttemptReset?: () => void
   onBusyChange?: (busy: boolean) => void
+  onRecordingSaved?: () => void
 }
 
 type SessionProps = SpeakingActivityProps & { referenceWord?: string | null }
 
 function SpeakingSession({
   exerciseId, expectedText, capture = 'video', referenceWord,
-  showReference = false, showExpectedText = true, showAnalysis = false, maxDurationMs, onComplete, onAttemptReset, onBusyChange,
+  showReference = false, reference: providedReference, referencePlaceholder,
+  showExpectedText = true, showHeading = true, showAnalysis = false, maxDurationMs,
+  onComplete, onAttemptReset, onBusyChange, onRecordingSaved,
 }: SessionProps) {
   const activity = useSpeakingActivity({ exerciseId, expectedText, capture })
   const word = referenceWord ?? (expectedText?.trim().split(/\s+/).length === 1 ? expectedText.trim().toLowerCase() : null)
-  const [reference, setReference] = useState<PracticeWord | null>(null)
+  const [fetchedReference, setReference] = useState<PracticeWord | null>(null)
+  const reference = providedReference === undefined ? fetchedReference : providedReference
+  const hasReferencePanel = showReference && Boolean(reference || referencePlaceholder)
   const [referenceError, setReferenceError] = useState('')
   useEffect(() => {
-    if (!showReference || !word) return
+    if (!showReference || !word || providedReference !== undefined) return
     const controller = new AbortController()
     listPracticeWords(controller.signal).then((items) => {
       if (!controller.signal.aborted) setReference(items.find((item) => item.id === word) ?? null)
@@ -40,7 +48,7 @@ function SpeakingSession({
       if (!controller.signal.aborted) setReferenceError('Reference preview unavailable. You can still record an attempt.')
     })
     return () => controller.abort()
-  }, [showReference, word])
+  }, [showReference, word, providedReference])
 
   useEffect(() => {
     onBusyChange?.(activity.busy || activity.capturing)
@@ -66,22 +74,29 @@ function SpeakingSession({
 
   return (
     <section aria-label="Speaking activity" className="min-w-0 [overflow-wrap:anywhere]">
-      <h2 className="mb-5 text-2xl font-medium">{expectedText && showExpectedText ? `Say “${expectedText}”` : 'Your response'}</h2>
+      {showHeading && <h2 className="mb-5 text-2xl font-medium">{expectedText && showExpectedText ? `Say “${expectedText}”` : 'Your response'}</h2>}
       {referenceError && <p className="mb-4 text-sm text-muted-foreground">{referenceError}</p>}
-      <div className={`grid min-w-0 grid-cols-1 gap-4 md:gap-6 ${showReference && reference ? 'md:grid-cols-2' : ''}`}>
-        {showReference && reference && (
+      <div className={`grid min-w-0 grid-cols-1 gap-4 md:gap-6 ${hasReferencePanel ? 'md:grid-cols-2' : ''}`}>
+        {hasReferencePanel && (
           <section className="min-w-0 rounded-xl border bg-card p-4 shadow-card sm:p-5">
             <h3 className="mb-4 text-lg font-semibold">Watch the example</h3>
-            <video key={word} controls playsInline preload="metadata" src={mediaUrl(reference.video_url)}
+            {reference ? <><video key={word} controls playsInline preload="metadata" src={mediaUrl(reference.video_url)}
               className="aspect-video w-full rounded-xl bg-foreground object-contain" aria-label={`Reference for ${word}`} />
-            <p className="mt-3 text-xs text-muted-foreground">{reference.has_audio ? 'Reference example' : 'Visual demo reference · no audio'}</p>
+            <p className="mt-3 text-xs text-muted-foreground">{reference.has_audio ? 'Reference example' : referencePlaceholder ? 'Silent video · use Listen to hear the word' : 'Visual demo reference · no audio'}</p></> :
+              <div className="grid aspect-video place-items-center rounded-xl border border-dashed bg-muted p-4 text-center text-sm text-muted-foreground">
+                {referencePlaceholder}
+              </div>}
           </section>
         )}
         <section className="min-w-0 rounded-xl border bg-card p-4 shadow-card sm:p-5">
           <h3 className="mb-4 text-lg font-semibold">Your turn</h3>
           {activity.recording ? <RecordingPreview file={activity.recording} capture={capture} /> : (
             <VideoRecorder capture={capture} maxDurationMs={duration} disabled={activity.busy}
-              onRecording={changeRecording} onRecordingChange={activity.setCapturing} />
+              onRecording={(file) => {
+                changeRecording(file)
+                onRecordingSaved?.()
+              }}
+              onRecordingChange={activity.setCapturing} />
           )}
           <p className="mt-3 text-xs text-muted-foreground">{expectedText ? 'Record the expected text.' : 'Speak freely; there is no fixed correct answer.'} Recording stops after {duration / 1000} seconds.</p>
           <details className="mt-4">
