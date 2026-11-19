@@ -13,6 +13,7 @@ import SettingsPage from './pages/settings/SettingsPage'
 function currentPage(): PageId {
   const path = window.location.hash.slice(1)
   if (path.startsWith('/lesson/')) return 'lesson'
+  if (path === '/settings') return 'settings'
   return sidebarItems.find((item) => item.href.slice(1) === path)?.id ?? 'home'
 }
 
@@ -34,7 +35,8 @@ export default function App() {
     return () => window.removeEventListener('hashchange', navigate)
   }, [])
   useEffect(() => {
-    document.title = `Nabu · ${sidebarItems.find((item) => item.id === page)?.label ?? 'Learn'}`
+    const label = page === 'settings' ? 'Settings' : sidebarItems.find((item) => item.id === page)?.label ?? 'Learn'
+    document.title = `Nabu · ${label}`
   }, [page])
   const Page = pages[page]
   return <AppLayout currentPage={page}><Page /></AppLayout>

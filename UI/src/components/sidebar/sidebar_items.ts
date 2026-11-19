@@ -4,8 +4,7 @@ export const sidebarItems = [
   { id: 'asl', label: 'ASL', href: '#/asl' },
   { id: 'handwriting', label: 'Handwriting', href: '#/handwriting' },
   { id: 'pronunciation', label: 'Pronunciation', href: '#/pronunciation' },
-  { id: 'settings', label: 'Settings', href: '#/settings' },
   { id: 'profile', label: 'Profile', href: '#/profile' },
 ] as const
 
-export type PageId = typeof sidebarItems[number]['id']
+export type PageId = typeof sidebarItems[number]['id'] | 'settings'

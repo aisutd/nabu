@@ -132,7 +132,12 @@ export default function ProfilePage() {
             </ul> : <p className="mt-2 text-sm text-muted-foreground">Practice a speaking lesson or record a word in the <a href="#/pronunciation" className="font-bold text-primary underline">Pronunciation Studio</a> to add it here.</p>}
           </section>
         </div>
-        <PracticeCalendar activity={activity} today={today} />
+        <div className="grid gap-4">
+          <PracticeCalendar activity={activity} today={today} />
+          <a href="#/settings" aria-label="Settings" title="Settings" className="grid size-24 place-items-center justify-self-end rounded-xl text-6xl leading-none text-neutral-700 hover:bg-neutral-500/15 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2">
+            <span aria-hidden="true">⚙︎</span>
+          </a>
+        </div>
       </div>
       <div ref={accountPanel} id="profile-account" hidden={!showAccount}>
         <AccountDetails preferences={preferences} />
