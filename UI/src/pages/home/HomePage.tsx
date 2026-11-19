@@ -1,4 +1,3 @@
-import GreetingStrip from '../../components/home/GreetingStrip'
 import ContinueLesson from '../../components/learner/ContinueLesson'
 import WeeklyProgress from '../../components/learner/WeeklyProgress'
 import { learningDashboard } from '../../data/learner_dashboard'
@@ -52,7 +51,6 @@ export default function HomePage() {
           <span className="mt-2 text-sm text-muted-foreground">Browse the full learning path.</span>
         </a>
       </div>
-      <GreetingStrip />
     </div>
   )
 }
