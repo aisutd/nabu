@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { Question } from '../../data/lessons'
-import { canContinueQuestion } from '../../data/lesson_progress'
+import { canContinueQuestion, handwritingPassScore } from '../../data/lesson_progress'
 import type { Attempt } from '../../data/lesson_progress'
 import type { SpeakingResult } from '../../api/speaking'
 import SpeakingActivity from '../speaking/SpeakingActivity'
@@ -10,10 +10,19 @@ import NabuFailAnimation from '../feedback/NabuFailAnimation'
 
 const primary = 'min-h-12 rounded-lg bg-primary px-6 py-3 font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40'
 const secondary = 'min-h-11 rounded-lg border bg-card px-4 py-2 text-sm font-bold hover:bg-secondary disabled:opacity-40'
-const handwritingRetryThreshold = 90
-
-function needsHandwritingRetry(similarity: number) {
-  return similarity < handwritingRetryThreshold
+function resultMessage(question: Question, attempt: Attempt, passed: boolean) {
+  switch (question.kind) {
+    case 'signing':
+      return passed ? `The recognizer matched ${question.letter}.` : `The recognizer saw ${attempt.answer}. Try ${question.letter} again.`
+    case 'handwriting':
+      return `${attempt.handwriting?.similarity ?? '—'}% shape similarity. ${passed ? 'Your writing meets the shape goal.' : `Try a new sample to reach ${handwritingPassScore}%.`}`
+    case 'speaking':
+      return passed ? `The recognizer heard “${question.word}”.`
+        : attempt.speaking?.heard ? `The recognizer heard “${attempt.speaking.heard}”. Try saying “${question.word}” again.`
+        : `The review couldn’t confirm “${question.word}”. Try a new recording.`
+    default:
+      return passed ? question.explanation : 'Try another answer to continue.'
+  }
 }
 
 type Props = {
@@ -79,14 +88,17 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
     const next = { ...makeAttempt([], question.letter, null), handwriting: { similarity } }
     setAttempt(next)
     onAttempt(next)
-    if (needsHandwritingRetry(similarity)) setFailPlay(Date.now())
+    if (!canContinueQuestion(question, next)) setFailPlay(Date.now())
   }
 
-  const handwritingSimilarity = attempt?.handwriting?.similarity
-  const handwritingNeedsRetry = typeof handwritingSimilarity === 'number' && needsHandwritingRetry(handwritingSimilarity)
+  const showFeedback = attempt && !attempt.skipped && !busy
+  const handwriting = question.kind === 'handwriting'
+  const unconfirmedSpeech = question.kind === 'speaking' && !attempt?.speaking?.heard && attempt?.speaking?.match !== false
+  const feedbackTitle = ready ? (handwriting ? 'Shape goal met!' : 'Correct!')
+    : handwriting ? 'Try writing it again' : unconfirmedSpeech ? 'Try another recording' : 'Not quite'
   const continueHint = question.kind === 'speaking' ? `The recognized word must match “${question.word}” to enable Continue.`
     : question.kind === 'signing' ? `Check a recognized ${question.letter} to continue.`
-    : 'Review a handwriting sample to continue.'
+    : `Reach ${handwritingPassScore}% shape similarity to continue.`
 
   return (
     <div>
@@ -96,25 +108,11 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
           <p className="mb-5 text-muted-foreground">{question.prompt}</p>
           <SpeakingActivity exerciseId={question.exerciseId} capture="video" showReference={question.showReference}
             onComplete={speakingComplete} onAttemptReset={() => setAttempt(null)} onBusyChange={reportBusy} />
-          {previous?.speaking?.hasResult && !busy && attempt === previous && <p className="mt-4 text-sm text-muted-foreground">{ready ? 'Your matching attempt is saved. Continue or record a new one.' : `Your last attempt did not confirm “${question.word}”. Record and review again.`}</p>}
         </>
       ) : question.kind === 'signing' ? (
-        <>
-          <SigningPractice question={question} onCheck={checkSign} />
-          {attempt && <p role="status" className="mt-4 rounded-lg bg-secondary p-4 text-sm">
-            {ready ? `The recognizer matched ${question.letter}. You can continue.` : `The recognizer saw ${attempt.answer}. Try ${question.letter} again.`}
-          </p>}
-        </>
+        <SigningPractice question={question} onCheck={checkSign} />
       ) : question.kind === 'handwriting' ? (
-        <>
-          <HandwritingPractice question={question} onReview={reviewHandwriting} onReset={() => setAttempt(null)} onBusyChange={reportBusy} />
-          {ready && <div role="status" className={`mt-4 rounded-lg p-4 text-sm ${handwritingNeedsRetry ? 'bg-warning/20' : 'bg-secondary'}`}>
-            <strong>{handwritingSimilarity}% shape similarity</strong>
-            <p className="mt-1">{handwritingNeedsRetry
-              ? 'The shape differs from the reference. Try another sample or continue.'
-              : 'Your review is saved. Try another sample or continue.'}</p>
-          </div>}
-        </>
+        <HandwritingPractice question={question} onReview={reviewHandwriting} onReset={() => setAttempt(null)} onBusyChange={reportBusy} />
       ) : (
         <section className="rounded-xl border bg-card p-5 shadow-card sm:p-8">
           {question.kind === 'choice' && question.picture && <LessonPicture picture={question.picture} />}
@@ -138,24 +136,25 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
               <button type="button" disabled={checked || selected.length === 0} onClick={() => setSelected([])} className="mt-4 min-h-11 text-sm font-bold text-muted-foreground disabled:opacity-40">Clear sentence</button>
             </div>
           )}
-          {checked && attempt && <div role="status" className={`mt-5 rounded-lg p-4 ${attempt.correct ? 'bg-success/15' : 'bg-warning/20'}`}>
-            <p className="font-bold">{attempt.correct ? 'That’s right.' : 'Not quite. Try another answer.'}</p>
-            <p className="mt-2 text-sm">{attempt.correct ? question.explanation : 'You can try again before continuing.'}</p>
-          </div>}
         </section>
       )}
+      {showFeedback && <div role="status" className={`mt-6 flex items-start gap-4 rounded-xl border p-5 shadow-card ${ready ? 'border-success bg-success/15' : 'border-warning bg-warning/15'}`}>
+        <span aria-hidden="true" className={`grid size-10 shrink-0 place-items-center rounded-full text-xl font-extrabold ${ready ? 'bg-success/25' : 'bg-warning/30'}`}>{ready ? '✓' : '!'}</span>
+        <div>
+          <p className="font-heading text-2xl font-semibold leading-tight">{feedbackTitle}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{resultMessage(question, attempt, ready)}</p>
+        </div>
+      </div>}
       <footer className="mt-6 flex flex-wrap items-center justify-between gap-3">
         {!knowledgeQuestion ? (
           <div>
             <button type="button" disabled={busy} onClick={() => onSkip(makeAttempt([], '', null, true))} className="min-h-11 px-2 text-sm text-muted-foreground underline underline-offset-4 disabled:opacity-40">Skip this question</button>
-            {!ready && <p className="text-xs text-muted-foreground">{continueHint}</p>}
+            {!ready && !showFeedback && <p className="text-xs text-muted-foreground">{continueHint}</p>}
           </div>
-        ) : <span className="text-xs text-muted-foreground">Take your time. Retries are welcome.</span>}
-        {!knowledgeQuestion ? <button type="button" disabled={busy || !ready} onClick={onAdvance} className={primary}>Continue →</button>
-          : ready ? <button type="button" disabled={busy} onClick={onAdvance} className={primary}>Continue →</button>
-
-          : checked ? <button type="button" onClick={() => { setAttempt(null); setSelected([]) }} className={primary}>Try again</button>
-          : <button type="button" onClick={checkAnswer} disabled={selected.length === 0 || (question.kind === 'sentence' && selected.length !== question.tokens.length)} className={primary}>Check answer</button>}
+        ) : !ready && (checked
+          ? <button type="button" onClick={() => { setAttempt(null); setSelected([]) }} className={secondary}>Try again</button>
+          : <button type="button" onClick={checkAnswer} disabled={selected.length === 0 || (question.kind === 'sentence' && selected.length !== question.tokens.length)} className={primary}>Check answer</button>)}
+        <button type="button" disabled={busy || !ready} onClick={onAdvance} className={`ml-auto ${primary}`}>Continue →</button>
       </footer>
     </div>
   )
