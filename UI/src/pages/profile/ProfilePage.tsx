@@ -7,6 +7,7 @@ import { unitWords } from '../../data/lessons'
 import useLearnerPreferences from '../../hooks/use_learner_preferences'
 import useLessonProgress from '../../hooks/use_lesson_progress'
 import PracticeCalendar from './PracticeCalendar'
+import NabuGreeting from './NabuGreeting'
 
 const card = 'rounded-xl border bg-card p-5 shadow-card sm:p-6'
 const field = 'mt-2 min-h-11 w-full rounded-lg border border-input bg-background/30 px-3 py-2 font-normal'
@@ -137,7 +138,10 @@ export default function ProfilePage() {
             </ul> : <p className="mt-2 text-sm text-muted-foreground">Practice a speaking lesson or record a word in the <a href="#/pronunciation" className="font-bold text-primary underline">Pronunciation Studio</a> to add it here.</p>}
           </section>
         </div>
-        <PracticeCalendar activity={activity} today={today} />
+        <div className="grid gap-2">
+          <PracticeCalendar activity={activity} today={today} />
+          <NabuGreeting />
+        </div>
       </div>
       <div ref={accountPanel} id="profile-account" hidden={!showAccount}>
         <AccountDetails preferences={preferences} />

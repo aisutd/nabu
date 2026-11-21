@@ -8,24 +8,23 @@ from pathlib import Path
 from threading import Lock
 from uuid import UUID, uuid4
 
-import cv2
 import matplotlib
 import numpy as np
 import torch
 
 matplotlib.use("Agg")
 
-from fastapi import HTTPException, UploadFile
+from fastapi import BackgroundTasks, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from .learner_feedback import learner_feedback
+from .speaking import stage_reference
 
 from pronounciation.training.mouth_training import MouthEncoder
 from pronounciation.datasets.preprocess_recordings import normalize_landmarks, resample_sequence
 
 from ..analysis.compare import compare, plot, feedback
-from ..analysis.detector import MouthTracker
-from ..analysis.transcribe import check
-from ..analysis.video_input import landmarks_from_video, prepare_wav
+from ..analysis.transcribe import check, warm_speech_model
+from ..analysis.video_input import comparison_landmarks, prepare_wav, track_video
 
 DATA = Path(__file__).resolve().parents[1] / "test_data" / "api"
 PLOTS = DATA / "plots"
@@ -53,11 +52,24 @@ def practice_library():
     ]
 
 
-def practice_reference(word: str):
+def practice_reference(word: str, background_tasks: BackgroundTasks):
     filename = REFERENCE_FILES.get(word)
     if filename is None or not (REFERENCE_DIR / filename).is_file():
         raise HTTPException(404, "Practice reference not available")
-    return FileResponse(REFERENCE_DIR / filename, media_type="video/mp4")
+    reference = REFERENCE_DIR / filename
+    background_tasks.add_task(warm_practice_reference, reference)
+    return FileResponse(reference, media_type="video/mp4")
+
+
+def warm_practice_reference(reference: Path):
+    try:
+        with processing:
+            _, path = stage_reference(DATA, reference)
+            reference_embedding(path, path.stat().st_mtime_ns)
+    except (OSError, ValueError, RuntimeError):
+        logging.getLogger(__name__).debug("Could not prepare practice reference %s", reference, exc_info=True)
+        return
+    warm_speech_model()
 
 
 def video_path(recording_id: UUID):
@@ -94,48 +106,22 @@ def mouth_model():
         raise RuntimeError(f"Could not load mouth model: {error}") from error
 
 
-def mouth_input_from_video(path: Path):
-    """Use the training pipeline's exact normalization and resampling on a trimmed one-word clip."""
-    video = cv2.VideoCapture(str(path))
-    if not video.isOpened():
-        raise ValueError("Cannot open uploaded video")
-    try:
-        fps = float(video.get(cv2.CAP_PROP_FPS))
-        count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-        if not np.isfinite(fps) or fps <= 0 or count < 3:
-            raise ValueError("Video needs at least three frames and a valid frame rate")
-        duration = count / fps
-        if duration > MAX_WORD_SECONDS:
-            raise ValueError("Neural comparison requires a trimmed single-word clip no longer than 5.0 seconds")
+def mouth_input(track):
+    frames, positions, _, fps, count = track
+    if not np.isfinite(fps) or fps <= 0 or count < 3:
+        raise ValueError("Video needs at least three frames and a valid frame rate")
+    if count / fps > MAX_WORD_SECONDS:
+        raise ValueError("Neural comparison requires a trimmed single-word clip no longer than 5.0 seconds")
 
-        # Match MultiVSR: sample up to 29 evenly spaced frames, then normalize and resample to 29.
-        positions = np.unique(np.linspace(0, count - 1, min(29, count)).round().astype(int))
-        frames = []
-        times = []
-        tracker = MouthTracker()
-        try:
-            for position in positions:
-                video.set(cv2.CAP_PROP_POS_FRAMES, int(position))
-                ok, frame = video.read()
-                if not ok:
-                    raise ValueError(f"Could not read video frame {position}")
-                crop, metrics, points = tracker.process_frame(frame)
-                if crop is None or metrics is None or "landmarks" not in metrics:
-                    raise ValueError(f"No detectable mouth at video frame {position}")
-                landmarks = np.asarray(metrics["landmarks"], dtype=np.float32)
-                if landmarks.shape != (40, 3) or not np.isfinite(landmarks).all():
-                    raise ValueError(f"Invalid mouth landmarks at video frame {position}: {landmarks.shape}")
-                frames.append(landmarks)
-                times.append(float(position) * 1000.0 / fps)
-        finally:
-            tracker.close()
-    finally:
-        video.release()
-
-    if len(frames) < 3:
-        raise ValueError("At least three valid mouth frames are required")
-    raw = np.stack(frames).astype(np.float32)
-    timestamps = np.asarray(times, dtype=np.float64)
+    # Use the same evenly spaced frame indices as the training input pipeline.
+    sampled = np.linspace(0, count - 1, min(29, count)).round().astype(int)
+    indices = np.searchsorted(positions, sampled)
+    if np.any(indices == len(positions)) or np.any(positions[indices] != sampled):
+        raise ValueError("No detectable mouth at one or more sampled frames")
+    raw = np.asarray(frames[indices], dtype=np.float32)
+    if raw.shape[1:] != (40, 3) or not np.isfinite(raw).all():
+        raise ValueError("Invalid mouth landmarks")
+    timestamps = sampled * 1000.0 / fps
     normalized = normalize_landmarks(raw)
     fixed = resample_sequence(normalized, timestamps, 29)
     if fixed.shape != MODEL_SHAPE or not np.isfinite(fixed).all():
@@ -143,13 +129,27 @@ def mouth_input_from_video(path: Path):
     return np.ascontiguousarray(fixed, dtype=np.float32)
 
 
-def neural_result(user_path: Path, example_path: Path):
+@lru_cache(maxsize=16)
+def reference_track(path: Path, modified_ns: int):
+    return track_video(str(path))
+
+
+@lru_cache(maxsize=16)
+def reference_embedding(path: Path, modified_ns: int):
+    data = mouth_input(reference_track(path, modified_ns))
+    model, _ = mouth_model()
+    with torch.inference_mode():
+        return model(torch.from_numpy(data[None]))
+
+
+def neural_result(user_path: Path, example_path: Path, user_track=None):
     model, info = mouth_model()
-    user_data = mouth_input_from_video(user_path)
-    example_data = mouth_input_from_video(example_path)
+    if user_track is None:
+        user_track = track_video(str(user_path), max_seconds=MAX_WORD_SECONDS)
+    user_data = mouth_input(user_track)
+    example_embedding = reference_embedding(example_path, example_path.stat().st_mtime_ns)
     with torch.inference_mode():
         user_embedding = model(torch.from_numpy(user_data[None]))
-        example_embedding = model(torch.from_numpy(example_data[None]))
         similarity = float(torch.sum(user_embedding * example_embedding).item())
     if not np.isfinite(similarity):
         raise ValueError("Model returned a non-finite similarity")
@@ -187,6 +187,7 @@ def upload_video(video: UploadFile):
                 "-map", "0:v:0",
                 "-map", "0:a:0?",
                 "-c:v", "libx264",
+                "-preset", "ultrafast",
                 "-pix_fmt", "yuv420p",
                 "-c:a", "aac",
                 "-movflags", "+faststart",
@@ -228,17 +229,15 @@ def comparison(user_id: UUID, example_id: UUID, label: str):
         raise HTTPException(422, "Label must produce a filename of 1–100 characters using letters or numbers")
     user_path, example_path = video_path(user_id), video_path(example_id)
     with processing:
-        tracker = MouthTracker()
         try:
-            user = landmarks_from_video(str(user_path), tracker)
-            example = landmarks_from_video(str(example_path), tracker)
+            user_track = track_video(str(user_path), track_motion=True)
+            user = comparison_landmarks(user_track)
+            example = comparison_landmarks(reference_track(example_path, example_path.stat().st_mtime_ns))
             if min(len(user[0]), len(example[0])) < 4:
                 raise ValueError("Each video needs at least four detected mouth frames")
             result = compare(user, example)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
-        finally:
-            tracker.close()
         png = PLOTS / f"{filename}.png"
         png.parent.mkdir(parents=True, exist_ok=True)
         plot(result, str(png))
@@ -246,7 +245,7 @@ def comparison(user_id: UUID, example_id: UUID, label: str):
         # Keep the legacy comparison working even when a video isn't a trimmed word.
         if len(label.strip().split()) == 1:
             try:
-                neural = neural_result(user_path, example_path)
+                neural = neural_result(user_path, example_path, user_track)
             except (ValueError, RuntimeError) as error:
                 neural = {"available": False, "reason": str(error)}
         else:

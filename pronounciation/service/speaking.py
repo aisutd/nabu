@@ -2,6 +2,7 @@
 import logging
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal
 from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
@@ -12,6 +13,8 @@ from pydantic import BaseModel, Field
 from .learner_feedback import learner_feedback
 from ..analysis.transcribe import check
 from ..analysis.video_input import prepare_wav
+
+speech_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="speaking-speech")
 
 # Small server-owned exercise registry. Replace with the lesson database when available.
 EXERCISES = {
@@ -35,6 +38,20 @@ def resolve_task(body):
         return exercise["expected_text"], exercise.get("reference_word")
     expected = (body.expected_text or "").strip() or None
     return expected, expected.lower() if expected and len(expected.split()) == 1 else None
+
+
+def stage_reference(data_dir: Path, reference: Path):
+    """Call under the comparison lock so only one request stages a reference."""
+    reference_id = uuid5(NAMESPACE_URL, f"nabu:{reference.resolve()}:{reference.stat().st_mtime_ns}")
+    destination = data_dir / f"{reference_id}.mp4"
+    if not destination.exists():
+        temporary = destination.with_suffix(".tmp")
+        try:
+            shutil.copyfile(reference, temporary)
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return reference_id, destination
 
 
 def create_speaking_handlers(data_dir, reference_dir, reference_files, upload_video, compare_recordings, processing):
@@ -84,19 +101,16 @@ def create_speaking_handlers(data_dir, reference_dir, reference_files, upload_vi
     def review(body: SpeakingRequest):
         expected, reference_word = resolve_task(body)
         source = source_path(body.recording_id)
+        def recognize():
+            wav = source if source.suffix == ".wav" else Path(prepare_wav(str(source), str(source.with_suffix('.speech.wav'))))
+            heard, match = check(wav, expected or "")
+            return {"heard": heard, "expected": expected, "match": match if expected else None}
+
+        speech_job = speech_worker.submit(recognize)
         speech = None
         comparison = None
         errors = {}
         checks = {"speech": {"status": "failed"}, "mouth": {"status": "skipped"}, "neural": {"status": "skipped"}}
-        try:
-            with processing:
-                wav = source if source.suffix == ".wav" else Path(prepare_wav(str(source), str(source.with_suffix('.speech.wav'))))
-                heard, match = check(wav, expected or "")
-            speech = {"heard": heard, "expected": expected, "match": match if expected else None}
-            checks["speech"] = {"status": "complete"}
-        except Exception:
-            logging.getLogger(__name__).exception("Speaking transcription failed")
-            errors["speech"] = "Could not transcribe this attempt. Check the microphone or try another recording."
 
         filename = reference_files.get(reference_word)
         reference = reference_dir / filename if filename else None
@@ -115,13 +129,8 @@ def create_speaking_handlers(data_dir, reference_dir, reference_files, upload_vi
             checks["neural"]["reason"] = reason
         else:
             try:
-                # Reuse a server-owned reference without requiring the learner to upload it.
-                reference_id = uuid5(NAMESPACE_URL, f"nabu:{reference.resolve()}:{reference.stat().st_mtime_ns}")
-                destination = data_dir / f"{reference_id}.mp4"
-                # Copy under the same processing lock; comparison acquires it separately.
                 with processing:
-                    if not destination.exists():
-                        shutil.copyfile(reference, destination)
+                    reference_id, _ = stage_reference(data_dir, reference)
                 comparison = compare_recordings(body.recording_id, reference_id, expected)
                 checks["mouth"] = {"status": "complete"}
                 neural = comparison.get("neural") or {}
@@ -133,6 +142,13 @@ def create_speaking_handlers(data_dir, reference_dir, reference_files, upload_vi
                 checks["mouth"] = {"status": "failed"}
                 checks["neural"] = {"status": "skipped", "reason": "Mouth analysis could not complete."}
                 errors["mouth"] = "Could not analyze mouth movement. Keep your mouth visible and retry."
+
+        try:
+            speech = speech_job.result()
+            checks["speech"] = {"status": "complete"}
+        except Exception:
+            logging.getLogger(__name__).exception("Speaking transcription failed")
+            errors["speech"] = "Could not transcribe this attempt. Check the microphone or try another recording."
 
         feedback = learner_feedback(speech, comparison)
         if speech is not None and expected is None:

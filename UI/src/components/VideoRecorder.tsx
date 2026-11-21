@@ -62,7 +62,14 @@ export default function VideoRecorder({ disabled, onRecording, onRecordingChange
     setOpening(true)
     try {
       const media = await navigator.mediaDevices.getUserMedia({
-        video: capture === 'video' ? { facingMode: 'user' } : false,
+        video: capture === 'video' ? {
+          facingMode: 'user',
+          ...(maxDurationMs <= 5000 && {
+            width: { ideal: 640, max: 640 },
+            height: { ideal: 480, max: 480 },
+            frameRate: { ideal: 10, max: 10 },
+          }),
+        } : false,
         audio: true,
       })
       if (!mounted.current) {

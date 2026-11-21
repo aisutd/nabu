@@ -196,8 +196,8 @@ def plot(res, out_png):
   a.legend()
   a.set_title(f"Lips at the biggest difference ({t[worst]:.0f}% of word)")
 
-  fig.tight_layout()
-  fig.savefig(out_png, dpi=120)
+  fig.subplots_adjust(left=0.09, right=0.97, bottom=0.09, top=0.94, wspace=0.28, hspace=0.42)
+  fig.savefig(out_png, dpi=100)
   plt.close(fig)
 
 def main():

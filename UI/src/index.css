@@ -356,3 +356,26 @@
 .learner-reduced-motion .greeting-track { animation: none !important; width: 100%; }
 .learner-reduced-motion .greeting-group { flex-wrap: wrap; justify-content: center; width: 100%; padding: 0 1rem; }
 .learner-reduced-motion .greeting-group[aria-hidden="true"] { display: none; }
+
+@keyframes profile-nabu-peek {
+  from { transform: translateX(calc(100% + 1.25rem)) rotate(12deg); }
+  55% { transform: translateX(28%) rotate(8deg); }
+  to { transform: translateX(0) rotate(0); }
+}
+
+@keyframes profile-nabu-wave {
+  0%, 100% { transform: rotate(0); }
+  18%, 54% { transform: rotate(-14deg); }
+  36%, 72% { transform: rotate(13deg); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .profile-nabu-peek { animation: profile-nabu-peek 680ms ease-out both; }
+  .profile-nabu-wave {
+    transform-origin: 52% 82%;
+    animation: profile-nabu-wave 820ms 680ms ease-in-out both;
+  }
+}
+
+.learner-reduced-motion .profile-nabu-peek,
+.learner-reduced-motion .profile-nabu-wave { animation: none !important; }
