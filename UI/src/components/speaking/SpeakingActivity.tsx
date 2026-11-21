@@ -19,6 +19,7 @@ export type SpeakingActivityProps = {
   showExpectedText?: boolean
   showHeading?: boolean
   showAnalysis?: boolean
+  prepareReview?: boolean
   maxDurationMs?: number
   onComplete?: (result: SpeakingResult) => void
   onAttemptReset?: () => void
@@ -31,10 +32,10 @@ type SessionProps = SpeakingActivityProps & { referenceWord?: string | null }
 function SpeakingSession({
   exerciseId, expectedText, capture = 'video', referenceWord,
   showReference = false, reference: providedReference, referencePlaceholder,
-  showExpectedText = true, showHeading = true, showAnalysis = false, maxDurationMs,
+  showExpectedText = true, showHeading = true, showAnalysis = false, prepareReview = false, maxDurationMs,
   onComplete, onAttemptReset, onBusyChange, onRecordingSaved,
 }: SessionProps) {
-  const activity = useSpeakingActivity({ exerciseId, expectedText, capture })
+  const activity = useSpeakingActivity({ exerciseId, expectedText, capture, prepareReview })
   const word = referenceWord ?? (expectedText?.trim().split(/\s+/).length === 1 ? expectedText.trim().toLowerCase() : null)
   const [fetchedReference, setReference] = useState<PracticeWord | null>(null)
   const reference = providedReference === undefined ? fetchedReference : providedReference
@@ -128,10 +129,10 @@ function SpeakingSession({
         {activity.recording && <button type="button" disabled={activity.busy} onClick={retry}
           className="rounded-lg border px-4 py-3 text-sm disabled:opacity-40">Record another attempt</button>}
       </div>
-      <p role="status" aria-live="polite" className="mt-3 text-sm text-muted-foreground">{activity.busy ? 'Processing your recording…' : activity.result ? 'Your review is ready.' : ''}</p>
+      <p role="status" aria-live="polite" className="mt-3 text-sm text-muted-foreground">{activity.busy || activity.preparation === 'preparing' ? 'Preparing your review…' : activity.result ? 'Your review is ready.' : activity.preparation === 'ready' ? 'Review ready to open.' : ''}</p>
       {activity.error && <p role="alert" className="mt-3 text-sm text-destructive">{activity.error}</p>}
       {activity.result && <SpeakingResults result={activity.result} showAnalysis={showAnalysis} onRetry={retry} />}
-      {showAnalysis && !activity.result && <p className="mt-5 text-sm text-muted-foreground">Analysis results will appear after review.</p>}
+      {showAnalysis && !activity.result && <p className="mt-5 text-sm text-muted-foreground">{prepareReview ? 'Analysis starts as soon as your recording is ready.' : 'Analysis results will appear after review.'}</p>}
       {activity.previous && <details className="mt-5"><summary className="cursor-pointer text-sm text-muted-foreground">Replay previous attempt</summary>
         <div className="mt-3 max-w-md"><RecordingPreview file={activity.previous} capture={capture} /></div>
       </details>}

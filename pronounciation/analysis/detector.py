@@ -9,7 +9,7 @@ from .config import DEFAULT_MODEL_PATH, DEFAULT_DETECTOR_PATH, DEFAULT_PADDING, 
 from .metrics import compute_phonetic_metrics, extract_mouth_crop
 
 class MouthTracker:
-  def __init__(self, landmarker_path: str = DEFAULT_MODEL_PATH, detector_path: str = DEFAULT_DETECTOR_PATH, face_margin: float = 0.25, detection_interval: int = 1):
+  def __init__(self, landmarker_path: str = DEFAULT_MODEL_PATH, detector_path: str = DEFAULT_DETECTOR_PATH, face_margin: float = 0.25, detection_interval: int = 1, *, track_motion: bool = False):
 
     for p in (landmarker_path, detector_path):
       if not os.path.exists(p):
@@ -20,6 +20,7 @@ class MouthTracker:
 
     self.face_margin = face_margin
     self.detection_interval = detection_interval
+    self.track_motion = track_motion
     # Keep the face region between detection passes.
     self._face_bounds = None
     self._frame_count = 0
@@ -38,7 +39,7 @@ class MouthTracker:
     self.landmarker = vision.FaceLandmarker.create_from_options(
       vision.FaceLandmarkerOptions(
         base_options=python.BaseOptions(model_asset_path=landmarker_path),
-        running_mode=vision.RunningMode.IMAGE,
+        running_mode=vision.RunningMode.VIDEO if track_motion else vision.RunningMode.IMAGE,
         num_faces=1,
       )
     )
@@ -60,7 +61,7 @@ class MouthTracker:
     y2 = min(h, box.origin_y + box.height + my)
     return (x1, y1, x2, y2) if x2 > x1 and y2 > y1 else None
 
-  def process_frame(self, frame_bgr: np.ndarray, padding: int = DEFAULT_PADDING):
+  def process_frame(self, frame_bgr: np.ndarray, padding: int = DEFAULT_PADDING, *, timestamp_ms: int = 0):
     h, w = frame_bgr.shape[:2]
     # MediaPipe expects RGB; OpenCV supplies BGR.
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
@@ -81,7 +82,10 @@ class MouthTracker:
     # Give MediaPipe a contiguous face image.
     face_rgb = np.ascontiguousarray(frame_rgb[fy1:fy2, fx1:fx2])
     face_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=face_rgb)
-    result = self.landmarker.detect(image=face_image)
+    if self.track_motion:
+      result = self.landmarker.detect_for_video(face_image, timestamp_ms)
+    else:
+      result = self.landmarker.detect(image=face_image)
     if not result.face_landmarks:
       # Reacquire the face on the next frame.
       self._face_bounds = None

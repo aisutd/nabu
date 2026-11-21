@@ -246,6 +246,7 @@ export default function PronunciationPractice() {
         referencePlaceholder={referencePlaceholder}
         showHeading={false}
         showAnalysis
+        prepareReview={mode === 'guided'}
         onRecordingSaved={markPractice}
         onBusyChange={setBusy}
       />
