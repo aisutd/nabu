@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { lessons, unitWords } from '../../data/lessons'
+import { lessonUnits, unitWords } from '../../data/lessons'
 import type { ProgressMap } from '../../data/lesson_progress'
-import { availableLessons, learningDashboard, lessonHref } from '../../data/learner_dashboard'
+import { learningDashboard, lessonHref } from '../../data/learner_dashboard'
 import ContinueLesson from '../learner/ContinueLesson'
 
 export default function LessonHub({ progress }: { progress: ProgressMap }) {
   const [search, setSearch] = useState('')
   const { completed, completedThisWeek, next } = learningDashboard(progress)
-  const completion = Math.round(completed.length / availableLessons.length * 100)
-  const result = lessons.filter((lesson) =>
-    `${lesson.title} ${lesson.description} ${lesson.category}`.toLowerCase().includes(search.trim().toLowerCase()),
-  )
+  const query = search.trim().toLowerCase()
+  const results = lessonUnits.map((unit, index) => ({
+    ...unit,
+    number: index + 1,
+    matches: unit.lessons.filter((lesson) =>
+      `${unit.title} ${lesson.title} ${lesson.description} ${lesson.category}`.toLowerCase().includes(query),
+    ),
+  })).filter((unit) => unit.matches.length)
 
   return (
     <div className="space-y-6 pb-6">
@@ -20,30 +24,42 @@ export default function LessonHub({ progress }: { progress: ProgressMap }) {
           className="min-h-11 w-full rounded-lg border bg-card px-4 py-2 text-sm sm:w-56" />
       </header>
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2.5fr)_minmax(14rem,1fr)]">
-        <section className="overflow-hidden rounded-xl border bg-card shadow-card">
-          <header className="flex flex-wrap items-center justify-between gap-3 p-5">
-            <div><h2 className="text-xl font-semibold">Foundations</h2><p className="mt-1 text-xs font-bold text-muted-foreground">English · Unit 1 · {availableLessons.length} available lessons</p></div>
-            <span className="rounded-full bg-success/15 px-3 py-1.5 text-xs font-extrabold">{completion}% complete</span>
-          </header>
-          {result.length ? <ol className="divide-y border-t">{result.map((lesson) => {
-            const state = progress[lesson.id]
-            const preview = lesson.status === 'coming-soon'
-            const status = preview ? 'Coming soon · View preview' : state?.completed ? 'Completed · Review' : state?.cursor ? `${state.cursor} of ${lesson.questions.length} complete · Resume` : lesson.category
-            const style = state?.completed ? 'bg-success/20' : preview ? 'bg-secondary text-muted-foreground' : 'bg-primary/10 text-primary'
-            return <li key={lesson.id}>
-              <a href={lessonHref(lesson.id)} className="flex items-center gap-3 px-4 py-4 hover:bg-secondary sm:gap-4 sm:px-5">
-                <span aria-hidden="true" className={`grid size-10 shrink-0 place-items-center rounded-lg font-heading ${style}`}>{state?.completed ? '✓' : lesson.symbol}</span>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-lg font-semibold leading-tight">{lesson.title}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{lesson.description}</p>
-                  <p className="mt-1 text-xs font-bold text-primary">{status}</p>
+        <div className="grid gap-4">
+          {!results.length && <p role="status" className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">No lessons match your search.</p>}
+          {results.map((unit) => {
+            const available = unit.lessons.filter((lesson) => lesson.status === 'ready')
+            const done = completed.filter((lesson) => available.includes(lesson)).length
+            return <section key={unit.title} className="overflow-hidden rounded-xl border bg-card shadow-card">
+              <header className="flex flex-wrap items-center justify-between gap-3 p-5">
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground">English · Unit {unit.number}</p>
+                  <h2 className="mt-1 text-xl font-semibold">{unit.title}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{unit.goal}</p>
                 </div>
-                {!preview && <span className="hidden shrink-0 text-xs font-bold text-muted-foreground sm:block">{lesson.duration}</span>}
-                <span aria-hidden="true" className="text-primary">›</span>
-              </a>
-            </li>
-          })}</ol> : <p role="status" className="border-t p-5 text-sm text-muted-foreground">No lessons match your search.</p>}
-        </section>
+                <span className="rounded-full bg-success/15 px-3 py-1.5 text-xs font-extrabold">{done} of {available.length} complete</span>
+              </header>
+              <ol className="divide-y border-t">{unit.matches.map((lesson) => {
+                const state = progress[lesson.id]
+                const preview = lesson.status === 'coming-soon'
+                const status = preview ? 'Coming soon · View preview' : state?.completed ? 'Completed · Review' : state?.cursor ? `${state.cursor} of ${lesson.questions.length} complete · Resume` : lesson.category
+                const style = state?.completed ? 'bg-success/20' : preview ? 'bg-secondary text-muted-foreground' : 'bg-primary/10 text-primary'
+                return <li key={lesson.id}>
+                  <a href={lessonHref(lesson.id)} className="flex items-center gap-3 px-4 py-4 hover:bg-secondary sm:gap-4 sm:px-5">
+                    <span aria-hidden="true" className={`grid size-10 shrink-0 place-items-center rounded-lg font-heading ${style}`}>{state?.completed ? '✓' : lesson.symbol}</span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg font-semibold leading-tight">{lesson.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{lesson.description}</p>
+                      <p className="mt-1 text-xs font-bold text-primary">{status}</p>
+                    </div>
+                    {!preview && <span className="shrink-0 text-xs font-bold text-muted-foreground">{lesson.duration}</span>}
+                    <span aria-hidden="true" className="text-primary">›</span>
+                  </a>
+                </li>
+              })}</ol>
+            </section>
+          })}
+          {!query && <p className="px-2 text-sm font-semibold text-muted-foreground">More coming soon</p>}
+        </div>
         <aside className="grid gap-4">
           <ContinueLesson lesson={next} cursor={next ? progress[next.id]?.cursor : 0} compact />
           <section className="rounded-xl border bg-card p-5 shadow-card">

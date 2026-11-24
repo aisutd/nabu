@@ -45,14 +45,31 @@ test('summary counts retries as attempts, skipped questions separately', () => {
   const state = { cursor: 3, completed: true, attempts: [attempt('apple', { correct: false }), attempt('apple'), attempt('back'), attempt('june', { correct: null, skipped: true })] }
   assert.deepEqual(plain(progress.lessonSummary(state, lesson)), { attempts: 3, reviewed: 2, skipped: 1 })
 })
-test('unit uses the existing backend exercise IDs for all speaking questions', () => {
-  const words = new Set(['bad', 'back', 'bail', 'june', 'kent'])
+test('catalog questions have valid answer and exercise IDs', () => {
   for (const lesson of data.lessons) {
     assert.equal(lesson.status === 'ready', lesson.questions.length > 0)
     for (const question of lesson.questions) {
-      if (question.kind === 'speaking') assert.ok(words.has(question.exerciseId.replace('say-', '')))
+      if (question.kind === 'speaking') assert.equal(question.exerciseId, `say-${question.word.toLowerCase().replaceAll(' ', '-')}`)
       if (question.kind === 'choice') assert.ok(question.options.some((option) => option.id === question.answer))
       if (question.kind === 'sentence') assert.deepEqual([...question.order].sort(), plain(question.tokens.map((token) => token.id).sort()))
+    }
+  }
+})
+
+test('each of the six units has practice in all three modalities and a range of lesson lengths', () => {
+  assert.equal(data.lessonUnits.length, 6)
+  assert.equal(new Set(data.lessons.map(({ id }) => id)).size, data.lessons.length)
+  for (const unit of data.lessonUnits) {
+    assert.ok(unit.lessons.length >= 7, unit.title)
+    const kinds = new Set(unit.lessons.flatMap((lesson) => lesson.questions.map(({ kind }) => kind)))
+    for (const kind of ['speaking', 'handwriting', 'signing']) assert.ok(kinds.has(kind), unit.title)
+    const durations = new Set(unit.lessons.map(({ duration }) => duration))
+    for (const duration of ['2 min', '4 min', '10 min']) assert.ok(durations.has(duration), unit.title)
+    for (const lesson of unit.lessons) {
+      assert.equal(new Set(lesson.questions.map(({ id }) => id)).size, lesson.questions.length, lesson.title)
+      for (const question of lesson.questions) {
+        if (question.kind === 'signing') assert.ok(question.cue, question.letter)
+      }
     }
   }
 })
