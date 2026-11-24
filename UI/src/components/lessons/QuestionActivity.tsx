@@ -20,6 +20,8 @@ function resultMessage(question: Question, attempt: Attempt, passed: boolean) {
       return passed ? `The recognizer heard “${question.word}”.`
         : attempt.speaking?.heard ? `The recognizer heard “${attempt.speaking.heard}”. Try saying “${question.word}” again.`
         : `The review couldn’t confirm “${question.word}”. Try a new recording.`
+    case 'text':
+      return passed ? question.explanation : question.retryHint
     default:
       return passed ? question.explanation : 'Try another answer to continue.'
   }
@@ -36,10 +38,11 @@ type Props = {
 
 export default function QuestionActivity({ question, previous, onAttempt, onAdvance, onSkip, onBusyChange }: Props) {
   const [selected, setSelected] = useState<string[]>(previous?.answerIds ?? [])
+  const [written, setWritten] = useState(previous?.answer ?? '')
   const [attempt, setAttempt] = useState<Attempt | null>(previous ?? null)
   const [busy, setBusy] = useState(false)
   const [failPlay, setFailPlay] = useState<number | null>(null)
-  const knowledgeQuestion = question.kind === 'choice' || question.kind === 'sentence'
+  const knowledgeQuestion = question.kind === 'choice' || question.kind === 'sentence' || question.kind === 'text'
   const checked = knowledgeQuestion && attempt !== null && !attempt.skipped
   const ready = canContinueQuestion(question, attempt)
 
@@ -53,14 +56,23 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
   }
 
   function checkAnswer() {
-    if ((question.kind !== 'choice' && question.kind !== 'sentence') || checked) return
-    const correct = question.kind === 'choice' ? selected[0] === question.answer : selected.join('|') === question.order.join('|')
-    const options = question.kind === 'choice' ? question.options : question.tokens
-    const text = selected.map((id) => options.find((option) => option.id === id)?.text ?? '').join(' ').replace(/\s+([.,!?])/g, '$1')
-    const next = makeAttempt(selected, text, correct)
+    if (checked) return
+    let next: Attempt
+    if (question.kind === 'text') {
+      const answer = written.toLowerCase().replace(/[‘’]/g, "'").replace(/[.,!?]/g, ' ').trim().replace(/\s+/g, ' ')
+      const response = answer.replace(/^(hello|hi|hey|good morning) /, '')
+      next = makeAttempt([], written.trim(), question.answers.some((accepted) => accepted.toLowerCase() === response))
+    } else if (question.kind === 'choice' || question.kind === 'sentence') {
+      const correct = question.kind === 'choice' ? selected[0] === question.answer : selected.join('|') === question.order.join('|')
+      const options = question.kind === 'choice' ? question.options : question.tokens
+      const text = selected.map((id) => options.find((option) => option.id === id)?.text ?? '').join(' ').replace(/\s+([.,!?])/g, '$1')
+      next = makeAttempt(selected, text, correct)
+    } else {
+      return
+    }
     setAttempt(next)
     onAttempt(next)
-    if (!correct) setFailPlay(Date.now())
+    if (!next.correct) setFailPlay(Date.now())
   }
 
   function speakingComplete(result: SpeakingResult) {
@@ -96,7 +108,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
   const unconfirmedSpeech = question.kind === 'speaking' && !attempt?.speaking?.heard && attempt?.speaking?.match !== false
   const feedbackTitle = ready ? (handwriting ? 'Shape goal met!' : 'Correct!')
     : handwriting ? 'Try writing it again' : unconfirmedSpeech ? 'Try another recording' : 'Not quite'
-  const continueHint = question.kind === 'speaking' ? `The recognized word must match “${question.word}” to enable Continue.`
+  const continueHint = question.kind === 'speaking' ? `The recognized speech must match “${question.word}” to enable Continue.`
     : question.kind === 'signing' ? `Check a recognized ${question.letter} to continue.`
     : `Reach ${handwritingPassScore}% shape similarity to continue.`
 
@@ -106,7 +118,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
       {question.kind === 'speaking' ? (
         <>
           <p className="mb-5 text-muted-foreground">{question.prompt}</p>
-          <SpeakingActivity exerciseId={question.exerciseId} capture="video" showReference={question.showReference}
+          <SpeakingActivity exerciseId={question.exerciseId} showReference={question.showReference}
             onComplete={speakingComplete} onAttemptReset={() => setAttempt(null)} onBusyChange={reportBusy} />
         </>
       ) : question.kind === 'signing' ? (
@@ -126,6 +138,16 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
                 <span>{option.text}</span>
               </label>)}
             </fieldset>
+          ) : question.kind === 'text' ? (
+            <label className="mt-6 block font-bold">
+              Your reply
+              <input type="text" value={written} onChange={(event) => setWritten(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.nativeEvent.isComposing && written.trim()) checkAnswer()
+                }}
+                disabled={checked} maxLength={200}
+                className="mt-2 block min-h-12 w-full rounded-lg border border-input bg-background px-4 py-2 font-normal" />
+            </label>
           ) : (
             <div className="mt-6">
               <div aria-label="Your sentence" className="flex min-h-20 flex-wrap items-center gap-2 rounded-lg border border-dashed bg-secondary p-4">
@@ -153,7 +175,7 @@ export default function QuestionActivity({ question, previous, onAttempt, onAdva
           </div>
         ) : !ready && (checked
           ? <button type="button" onClick={() => { setAttempt(null); setSelected([]) }} className={secondary}>Try again</button>
-          : <button type="button" onClick={checkAnswer} disabled={selected.length === 0 || (question.kind === 'sentence' && selected.length !== question.tokens.length)} className={primary}>Check answer</button>)}
+          : <button type="button" onClick={checkAnswer} disabled={question.kind === 'text' ? !written.trim() : selected.length === 0 || (question.kind === 'sentence' && selected.length !== question.tokens.length)} className={primary}>Check answer</button>)}
         <button type="button" disabled={busy || !ready} onClick={onAdvance} className={`ml-auto ${primary}`}>Continue →</button>
       </footer>
     </div>

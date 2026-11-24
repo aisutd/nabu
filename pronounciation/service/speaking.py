@@ -23,6 +23,21 @@ EXERCISES = {
 }
 
 
+# The mouth-movement model uses isolated words. Lesson phrases use audio transcription.
+EXERCISES.update({
+    f"say-{phrase.replace(' ', '-')}": {
+        "expected_text": phrase, "capture": "audio", "reference_word": None,
+    }
+    for phrase in (
+        "good morning", "my name is maya", "nice to meet you",
+        "can i have a cup", "can i have a pen", "thank you",
+        "i wake up early", "i eat breakfast", "i leave home after breakfast",
+        "where is the bus stop", "go straight", "turn left",
+        "can i have some tea", "how much is the soup", "for here please",
+    )
+})
+
+
 class SpeakingRequest(BaseModel):
     recording_id: UUID
     exercise_id: str | None = Field(default=None, max_length=100)

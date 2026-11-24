@@ -88,6 +88,17 @@ class SpeakingServiceTests(unittest.TestCase):
         self.assertEqual(result['expected_text'], 'june')
         self.check.assert_called_once_with(self.audio, 'june')
 
+    def test_lesson_phrase_uses_audio_and_server_owned_text(self):
+        response = self.client.get('/speaking/exercises/say-can-i-have-some-tea')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['capture'], 'audio')
+        self.assertIsNone(response.json()['reference_word'])
+        self.check.return_value = ('can i have some tea', True)
+        result = self.review(exercise_id='say-can-i-have-some-tea', expected_text='back').json()
+        self.assertEqual(result['expected_text'], 'can i have some tea')
+        self.assertTrue(result['transcription']['match'])
+        self.compare.assert_not_called()
+
     def test_unknown_exercise_is_rejected(self):
         self.assertEqual(self.review(exercise_id='not-installed').status_code, 404)
         self.check.assert_not_called()
