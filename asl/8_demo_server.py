@@ -32,6 +32,9 @@ PORT = 8000
 JPEG_QUALITY = 75
 STREAM_FRAME_SECONDS = 1 / 30
 DOT_COLOR = (59, 72, 217)  # the page's jam red, in OpenCV's blue-green-red order
+# How long to wait before reopening the camera after it stops sending frames.
+CAMERA_RETRY_SECONDS = 2.0
+CAMERA_LOST_MESSAGE = "Camera disconnected. Reconnecting…"
 
 
 def load_bundle(path, check):
@@ -67,23 +70,39 @@ class LiveDemo:
         self.error = None
 
     def run_camera(self):
+        """Keep the camera running, reopening it whenever it stops sending frames."""
+        try:
+            with make_video_detector(BASE_DIR / "hand_landmarker.task") as detector:
+                while True:
+                    self._stream_until_camera_stops(detector)
+                    self._set_error(CAMERA_LOST_MESSAGE)
+                    time.sleep(CAMERA_RETRY_SECONDS)
+        except Exception as problem:  # Anything else is a real bug: show it, don't hide it.
+            self._set_error(str(problem))
+            raise
+
+    def _stream_until_camera_stops(self, detector):
+        """Process frames until the camera can't be opened or stops sending them."""
         cap = cv2.VideoCapture(0)
         # Keep only the newest frame. Otherwise frames queue up when processing is slower
         # than the camera, and the screen falls behind the hand.
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         try:
             if not cap.isOpened():
-                raise RuntimeError("Could not open webcam 0.")
-            with make_video_detector(BASE_DIR / "hand_landmarker.task") as detector:
-                reader = HandReader(cap, detector)
-                while True:
-                    self._process_frame(*reader.read())
-        except Exception as problem:  # Shown on the page instead of failing silently.
-            with self.lock:
-                self.error = str(problem)
-            raise
+                return
+            reader = HandReader(cap, detector)
+            while True:
+                try:
+                    frame, landmarks = reader.read()
+                except RuntimeError:  # The camera stopped sending frames.
+                    return
+                self._process_frame(frame, landmarks)
         finally:
             cap.release()
+
+    def _set_error(self, message):
+        with self.lock:
+            self.error = message
 
     def _process_frame(self, frame, landmarks):
         height, width = frame.shape[:2]
@@ -93,6 +112,7 @@ class LiveDemo:
         with self.lock:
             self.recognizer.update(landmarks, width, height, time.monotonic())
             self.jpeg = encoded.tobytes()
+            self.error = None  # Frames are arriving, so any earlier camera problem is over.
 
     def snapshot(self):
         with self.lock:
